@@ -16,6 +16,7 @@ import { useSession } from '@/composables/useSession';
 import { useScopedInterviews, useScopedMeasures, useScopedTasks } from '@/composables/useScoped';
 import { useAllCases } from '@/composables/useCases';
 import { categoryLabel, formatFolio } from '@/lib/catalogs';
+import { isForbidden } from '@/lib/errors';
 import { formatDate, formatDateTime, formatLongDate } from '@/lib/format';
 import { casesByMonth, collectDeadlines, computeCaseMetrics, isOverdueMeasure, isOverdueTask, isPendingMeasure, isPendingTask } from '@/lib/metrics';
 import { statusOf } from '@/lib/status';
@@ -29,6 +30,8 @@ import type { CaseRecord } from '@/types/api';
  */
 const { can } = useSession();
 const canCases = computed(() => can('cases.read'));
+/** El rol debería poder leer expedientes (según la matriz inicial), pero el servidor lo negó: faltan permisos aplicados en el sistema. */
+const serverDenied = computed(() => canCases.value && isForbidden(cases.error.value));
 const cases = useAllCases(canCases);
 const tasks = useScopedTasks({ enabled: () => canCases.value && can('tasks.read') });
 const measures = useScopedMeasures({ enabled: () => canCases.value && can('measures.read') });
@@ -95,8 +98,9 @@ const activity = computed(() => (metrics.value?.recent ?? []).map((record) => ({
   <div>
     <PageHeader title="Panel de inicio" :description="`${formatLongDate(new Date())}. Resumen de la convivencia escolar a partir de los expedientes a los que usted tiene acceso.`" />
 
-    <div v-if="!canCases" class="rounded-xl border border-slate-200 bg-white">
-      <EmptyState icon="lock" title="Su rol no incluye acceso a expedientes" description="Los indicadores se calculan con los expedientes autorizados. Use el menú para acceder a las secciones habilitadas para su perfil." />
+    <div v-if="!canCases || serverDenied" class="rounded-xl border border-slate-200 bg-white">
+      <EmptyState v-if="!canCases" icon="lock" title="Su rol no incluye acceso a expedientes" description="Los indicadores se calculan con los expedientes autorizados. Use el menú para acceder a las secciones habilitadas para su perfil." />
+      <EmptyState v-else icon="lock" title="El servidor no concede acceso a expedientes a su cuenta" description="Su rol debería poder verlos, pero los permisos de expedientes aún no están aplicados en el sistema. Quien administre la base de datos debe aplicar los permisos iniciales de los roles (comando roles:seed); mientras tanto puede usar las secciones de Administración." />
     </div>
 
     <template v-else>
