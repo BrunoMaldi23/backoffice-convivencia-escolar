@@ -160,6 +160,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   const str = (value: unknown, name: string, min = 1, max = 4000) => { if (typeof value !== 'string' || value.trim().length < min || value.length > max) fail(400, `${name} inválido`); return (value as string).trim(); };
   const optStr = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
   const expected = (body: Req['body']) => (Number.isInteger(body.expectedVersion) && (body.expectedVersion as number) >= 1 ? (body.expectedVersion as number) : fail(400, 'expectedVersion inválido'));
+  const only = (b: Req['body'], keys: string[]) => { const extra = Object.keys(b).filter((key) => !keys.includes(key)); if (extra.length) fail(400, `property ${extra.join(', ')} should not exist`); return b; };
   const paginate = <T,>(items: T[], q: Req['query'], fallback = 20) => { const page = Math.max(1, Number(q.page ?? 1)); const limit = Math.min(100, Math.max(1, Number(q.limit ?? fallback))); return { items: items.slice((page - 1) * limit, page * limit), total: items.length, page, limit }; };
   const userView = (u: AdminUser) => ({ ...u });
 
@@ -332,7 +333,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     db.links.push(link); event(id, 'PARTICIPANT_LINKED', { relatedEntityType: 'CASE_PARTICIPANT', relatedEntityId: link.id }); return { status: 201, data: link };
   });
   on('PATCH', '/cases/:id/participants/:lid', (req, [id, lid]) => {
-    require('participants.manage'); findCase(id); const link = db.links.find((l) => l.id === lid && l.caseId === id && !l.unlinkedAt) ?? fail(404, 'Asociación no disponible'); const b = body(req);
+    require('participants.manage'); findCase(id); const link = db.links.find((l) => l.id === lid && l.caseId === id && !l.unlinkedAt) ?? fail(404, 'Asociación no disponible'); const b = only(body(req), ['expectedVersion', 'participationCode']);
     if (link.version !== expected(b)) fail(409, 'El involucrado fue modificado por otra persona'); link.participationCode = str(b.participationCode, 'participationCode', 2, 40).toUpperCase(); link.version += 1; event(id, 'PARTICIPANT_UPDATED', { relatedEntityType: 'CASE_PARTICIPANT', relatedEntityId: lid }); return { status: 200, data: link };
   });
   on('POST', '/cases/:id/participants/:lid/unlink', (_r, [id, lid]) => {
@@ -408,7 +409,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   });
   on('GET', '/cases/:id/protocol-applications', (_r, [id]) => { require('protocols.read'); findCase(id); return { status: 200, data: db.applications.filter((application) => application.caseId === id) }; });
   on('POST', '/cases/:id/protocol-applications/:aid/revoke', (req, [id, aid]) => {
-    require('protocols.read'); findCase(id); const application = db.applications.find((item) => item.id === aid && item.caseId === id) ?? fail(404, 'Aplicación de protocolo no disponible'); const b = body(req);
+    require('protocols.read'); findCase(id); const application = db.applications.find((item) => item.id === aid && item.caseId === id) ?? fail(404, 'Aplicación de protocolo no disponible'); const b = only(body(req), ['expectedVersion', 'reason']);
     if (application.version !== expected(b)) fail(409, 'La aplicación del protocolo fue modificada por otra persona'); if (application.revokedAt) fail(409, 'La aplicación del protocolo ya fue revocada'); application.revokedAt = new Date().toISOString(); application.revocationReason = str(b.reason, 'reason', 5, 1000); application.version += 1;
     event(id, 'PROTOCOL_REVOKED', { relatedEntityType: 'CASE_PROTOCOL_APPLICATION', relatedEntityId: aid }); return { status: 201, data: application };
   });
@@ -441,7 +442,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     task.status = 'COMPLETADA'; task.completedAt = new Date().toISOString(); stamp(task); event(id, 'TASK_COMPLETED', { relatedEntityType: 'CASE_TASK', relatedEntityId: tid }); return { status: 201, data: task };
   });
   on('POST', '/cases/:id/tasks/:tid/update', (req, [id, tid]) => {
-    require('tasks.manage'); findCase(id); const task = db.tasks.find((t) => t.id === tid && t.caseId === id && t.status === 'PENDIENTE') ?? fail(404, 'Tarea pendiente no disponible'); const b = body(req);
+    require('tasks.manage'); findCase(id); const task = db.tasks.find((t) => t.id === tid && t.caseId === id && t.status === 'PENDIENTE') ?? fail(404, 'Tarea pendiente no disponible'); const b = only(body(req), ['expectedVersion', 'title', 'dueAt', 'assignedToUserId', 'status']);
     if (task.version !== expected(b)) fail(409, 'La tarea fue modificada por otra persona'); if (b.title !== undefined) task.title = str(b.title, 'title', 3, 300); if (b.dueAt !== undefined) task.dueAt = optStr(b.dueAt) ?? null; if (b.assignedToUserId !== undefined) task.assignedToUserId = optStr(b.assignedToUserId) ?? null; if (b.status === 'CANCELADA') task.status = 'CANCELADA'; else if (b.status !== undefined) fail(400, 'Estado de tarea no permitido'); stamp(task); event(id, task.status === 'CANCELADA' ? 'TASK_CANCELLED' : 'TASK_UPDATED', { relatedEntityType: 'CASE_TASK', relatedEntityId: tid }); return { status: 201, data: task };
   });
   on('GET', '/notifications', () => { require('notifications.read'); return { status: 200, data: [...db.notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }; });
@@ -654,14 +655,14 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   // ── Anulaciones (se conservan con motivo) y eliminaciones definitivas (registros aún reversibles) ──
   const reason = (b: Req['body']) => str(b.reason, 'reason', 5, 1000);
   const voidIt = (list: { id: string; caseId: string; version: number }[], permission: string, type: CaseEventType, entity: string) => (req: Req, [id, rid]: Params) => {
-    require(permission); openCase(id); const b = body(req); const item = list.find((x) => x.id === rid && x.caseId === id && !db.voidedIds.includes(x.id)) ?? fail(404, 'Registro no disponible');
+    require(permission); openCase(id); const b = only(body(req), ['expectedVersion', 'reason']); const item = list.find((x) => x.id === rid && x.caseId === id && !db.voidedIds.includes(x.id)) ?? fail(404, 'Registro no disponible');
     reason(b); if (item.version !== expected(b)) fail(409, 'El registro fue modificado por otra persona');
     db.voidedIds.push(rid); event(id, type, { relatedEntityType: entity, relatedEntityId: rid }); log(type, entity, rid); return { status: 201, data: item };
   };
   const dropEvents = (id: string, entityId: string) => { db.events = db.events.filter((e) => !(e.caseId === id && e.relatedEntityId === entityId)); };
   const dropIt = <T extends { id: string; caseId: string; version: number }>(list: T[], permission: string, entity: string, ready: (item: T) => boolean = () => true) => (req: Req, [id, rid]: Params) => {
     require(permission); openCase(id); const item = list.find((x) => x.id === rid && x.caseId === id && !db.voidedIds.includes(x.id)) ?? fail(404, 'Registro no disponible');
-    if (item.version !== expected(body(req)) || !ready(item)) fail(409, 'El registro fue modificado o ya no está disponible para eliminar');
+    if (item.version !== expected(only(body(req), ['expectedVersion'])) || !ready(item)) fail(409, 'El registro fue modificado o ya no está disponible para eliminar');
     list.splice(list.indexOf(item), 1); dropEvents(id, rid); log(`${entity}_DELETED`, entity, rid); return { status: 200, data: { id: rid } };
   };
   on('POST', '/cases/:id/reports/:rid/void', voidIt(db.reports, 'reports.update', 'REPORT_VOIDED', 'CASE_REPORT'));

@@ -2,6 +2,7 @@ import type {
   AppNotification, CaseDocument, CaseFollowUp, CaseMeasure, CaseReferral, CaseSummons, CaseTask, DocumentKind, FollowUpInput, MeasureInput, MeasureStatus, Page, ProtocolApplication,
   ProtocolTemplate, ProtocolVersion, ReferralInput, ReferralStatus, SummonsInput, SummonsStatus, TaskInput, TaskStatus, UpdateReferralInput, UpdateSummonsInput, Uuid
 } from '@/types/api';
+import { pick } from '@/lib/body';
 import { api } from './api';
 
 /** Documentos, protocolos, medidas, seguimientos, tareas y notificaciones: docs/api/backend-contracts.md ("Operación de expediente"). */
@@ -31,7 +32,7 @@ export const linkVideoEvidence = async (caseId: Uuid, input: { title: string; ex
 export const downloadDocument = async (caseId: Uuid, id: Uuid): Promise<Blob> =>
   (await api.get<Blob>(`/cases/${caseId}/documents/${id}/download`, { responseType: 'blob' })).data;
 export const voidDocument = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; reason: string }): Promise<CaseDocument> =>
-  (await api.post<CaseDocument>(`/cases/${caseId}/documents/${id}/void`, input)).data;
+  (await api.post<CaseDocument>(`/cases/${caseId}/documents/${id}/void`, pick(input, ['expectedVersion', 'reason'] as const))).data;
 
 export const listProtocols = async (establishmentId: Uuid): Promise<ProtocolTemplate[]> => (await api.get<ProtocolTemplate[]>(`/protocols/${establishmentId}`)).data;
 export const createProtocol = async (input: { establishmentId: Uuid; code: string; name: string; title: string; content: unknown }): Promise<ProtocolTemplate> =>
@@ -39,7 +40,7 @@ export const createProtocol = async (input: { establishmentId: Uuid; code: strin
 export const publishProtocolVersion = async (versionId: Uuid, establishmentId: Uuid): Promise<ProtocolVersion> => (await api.post<ProtocolVersion>(`/protocols/versions/${versionId}/publish`, { establishmentId })).data;
 export const applyProtocol = async (caseId: Uuid, versionId: Uuid): Promise<ProtocolApplication> => (await api.post<ProtocolApplication>(`/cases/${caseId}/protocols/${versionId}`, {})).data;
 export const listProtocolApplications = async (caseId: Uuid): Promise<ProtocolApplication[]> => (await api.get<ProtocolApplication[]>(`/cases/${caseId}/protocol-applications`)).data;
-export const revokeProtocolApplication = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; reason: string }): Promise<ProtocolApplication> => (await api.post<ProtocolApplication>(`/cases/${caseId}/protocol-applications/${id}/revoke`, input)).data;
+export const revokeProtocolApplication = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; reason: string }): Promise<ProtocolApplication> => (await api.post<ProtocolApplication>(`/cases/${caseId}/protocol-applications/${id}/revoke`, pick(input, ['expectedVersion', 'reason'] as const))).data;
 
 export const listMeasures = async (caseId: Uuid): Promise<CaseMeasure[]> => (await api.get<CaseMeasure[]>(`/cases/${caseId}/measures`)).data;
 export const createMeasure = async (caseId: Uuid, input: MeasureInput): Promise<CaseMeasure> => (await api.post<CaseMeasure>(`/cases/${caseId}/measures`, input)).data;
@@ -48,12 +49,12 @@ export const updateMeasure = async (caseId: Uuid, id: Uuid, input: { expectedVer
 export const listFollowUps = async (caseId: Uuid): Promise<CaseFollowUp[]> => (await api.get<CaseFollowUp[]>(`/cases/${caseId}/follow-ups`)).data;
 export const createFollowUp = async (caseId: Uuid, input: FollowUpInput): Promise<CaseFollowUp> => (await api.post<CaseFollowUp>(`/cases/${caseId}/follow-ups`, input)).data;
 export const voidFollowUp = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; reason: string }): Promise<CaseFollowUp> =>
-  (await api.post<CaseFollowUp>(`/cases/${caseId}/follow-ups/${id}/void`, input)).data;
+  (await api.post<CaseFollowUp>(`/cases/${caseId}/follow-ups/${id}/void`, pick(input, ['expectedVersion', 'reason'] as const))).data;
 
 export const listTasks = async (caseId: Uuid): Promise<CaseTask[]> => (await api.get<CaseTask[]>(`/cases/${caseId}/tasks`)).data;
 export const createTask = async (caseId: Uuid, input: TaskInput): Promise<CaseTask> => (await api.post<CaseTask>(`/cases/${caseId}/tasks`, input)).data;
 export const completeTask = async (caseId: Uuid, id: Uuid): Promise<CaseTask> => (await api.post<CaseTask>(`/cases/${caseId}/tasks/${id}/complete`, {})).data;
-export const updateTask = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; title?: string; dueAt?: string | null; assignedToUserId?: string | null; status?: TaskStatus }): Promise<CaseTask> => (await api.post<CaseTask>(`/cases/${caseId}/tasks/${id}/update`, input)).data;
+export const updateTask = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; title?: string; dueAt?: string | null; assignedToUserId?: string | null; status?: TaskStatus }): Promise<CaseTask> => (await api.post<CaseTask>(`/cases/${caseId}/tasks/${id}/update`, pick(input, ['expectedVersion', 'title', 'dueAt', 'assignedToUserId', 'status'] as const))).data;
 
 export const listNotifications = async (): Promise<AppNotification[]> => (await api.get<AppNotification[]>('/notifications')).data;
 export const markNotificationRead = async (id: Uuid): Promise<AppNotification> => (await api.post<AppNotification>(`/notifications/${id}/read`, {})).data;

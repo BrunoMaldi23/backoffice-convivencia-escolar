@@ -78,3 +78,28 @@ describe('anulación', () => {
     expect(isConflict(await rejection(cases.voidReport(target.id, report.id, { expectedVersion: report.version, reason: 'Otra vez.' })))).toBe(false);
   });
 });
+
+describe('cuerpo de las solicitudes', () => {
+  // La API real rechaza con 400 los campos desconocidos: el `id` del registro va en la ruta, nunca en el cuerpo.
+  it('no envía el identificador del registro ni otros campos de la mutación', async () => {
+    const target = openCase();
+    const task = await ops.createTask(target.id, { title: 'Tarea con edición' });
+    const edited = await ops.updateTask(target.id, task.id, { id: task.id, expectedVersion: task.version, title: 'Tarea editada' } as Parameters<typeof ops.updateTask>[2]);
+    expect(edited.title).toBe('Tarea editada');
+    const cancelled = await ops.updateTask(target.id, task.id, { id: task.id, expectedVersion: edited.version, status: 'CANCELADA' } as Parameters<typeof ops.updateTask>[2]);
+    expect(cancelled.status).toBe('CANCELADA');
+
+    const follow = await ops.createFollowUp(target.id, { occurredAt: new Date().toISOString(), note: 'Seguimiento anulable' });
+    await ops.voidFollowUp(target.id, follow.id, { id: follow.id, expectedVersion: follow.version, reason: 'Registrado por error.' } as Parameters<typeof ops.voidFollowUp>[2]);
+
+    const report = await cases.createReport(target.id, { receivedAt: new Date().toISOString(), channelCode: 'DIRECTO', classificationCode: 'LEVE', factualDescription: 'Denuncia anulable' });
+    await cases.voidReport(target.id, report.id, { id: report.id, expectedVersion: report.version, reason: 'Registrada por error.' } as Parameters<typeof cases.voidReport>[2]);
+
+    const document = fake.db.documents.find((d) => fake.db.cases.find((c) => c.id === d.caseId)?.status !== 'CERRADO')!;
+    await ops.voidDocument(document.caseId, document.id, { id: document.id, expectedVersion: document.version, reason: 'Cargado por error.' } as Parameters<typeof ops.voidDocument>[2]);
+
+    const version = fake.db.protocols[0]!.versions[0]!;
+    const application = await ops.applyProtocol(target.id, version.id);
+    await ops.revokeProtocolApplication(target.id, application.id, { id: application.id, expectedVersion: application.version, reason: 'Aplicado por error.' } as Parameters<typeof ops.revokeProtocolApplication>[2]);
+  });
+});
