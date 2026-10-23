@@ -24,8 +24,8 @@ const FEATURES = [
       <div class="absolute inset-0 -z-20 bg-[linear-gradient(150deg,#0a2c8c_0%,#1550c9_48%,#2f7bf2_100%)]" aria-hidden="true" />
       <div class="absolute -right-20 -top-24 -z-10 hidden h-[24rem] w-[24rem] rounded-full bg-sky-300/25 blur-3xl lg:block" aria-hidden="true" />
       <!-- Fachada del colegio: se funde con el azul hacia arriba y queda detrás de la nota inferior -->
-      <img :src="facade" alt="" class="absolute inset-x-0 bottom-0 -z-10 hidden h-[58%] w-full object-cover object-[62%_60%] opacity-45 mix-blend-luminosity [mask-image:linear-gradient(to_top,black_0%,black_30%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_30%,transparent_100%)] lg:block" width="1000" height="667" decoding="async">
-      <div class="absolute inset-x-0 bottom-0 -z-10 hidden h-[58%] bg-[linear-gradient(to_top,rgba(10,44,140,0.55),transparent_70%)] lg:block" aria-hidden="true" />
+      <img :src="facade" alt="" class="absolute inset-x-0 bottom-0 -z-10 hidden h-[36%] w-full object-cover object-[55%_66%] opacity-60 mix-blend-luminosity [mask-image:linear-gradient(to_top,black_0%,black_40%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_40%,transparent_100%)] lg:block" width="1000" height="667" decoding="async">
+      <div class="absolute inset-x-0 bottom-0 -z-10 hidden h-[36%] bg-[linear-gradient(to_top,rgba(10,44,140,0.7),transparent_85%)] lg:block" aria-hidden="true" />
       <svg class="absolute inset-0 -z-10 hidden h-full w-full lg:block" viewBox="0 0 800 940" preserveAspectRatio="xMidYMid slice" fill="none" aria-hidden="true" focusable="false">
         <path d="M800 120C690 150 600 250 560 380" stroke="#ffffff" stroke-opacity=".14" stroke-width="1.5" />
         <path d="M-10 560C80 620 120 760 90 960" stroke="#ffffff" stroke-opacity=".1" stroke-width="1.5" />
