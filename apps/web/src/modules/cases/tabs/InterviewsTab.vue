@@ -10,7 +10,7 @@ import MutationDialog from '@/components/MutationDialog.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { useCorrectInterview, useCreateInterview, useFinalizeInterview, useInterviews, useUpdateInterview } from '@/composables/useCaseContent';
+import { useCorrectInterview, useCreateInterview, useFinalizeInterview, useInterviews, useUpdateInterview, useVoidInterview } from '@/composables/useCaseContent';
 import { useDirectory } from '@/composables/useDirectory';
 import { useSession } from '@/composables/useSession';
 import { MODALITY_OPTIONS, modalityLabel } from '@/lib/catalogs';
@@ -30,6 +30,7 @@ const create = useCreateInterview(props.caseId);
 const update = useUpdateInterview(props.caseId);
 const finalize = useFinalizeInterview(props.caseId);
 const correct = useCorrectInterview(props.caseId);
+const voidInterview = useVoidInterview(props.caseId);
 
 const formOpen = ref(false);
 const editing = ref<Interview | null>(null);
@@ -40,6 +41,10 @@ const target = ref<Interview | null>(null);
 const mode = ref<'finalize' | 'correct' | null>(null);
 const reason = ref('');
 const reasonError = ref<string | null>(null);
+const voidOpen = ref(false);
+const voidTarget = ref<Interview | null>(null);
+const voidReason = ref('');
+const voidError = ref<string | null>(null);
 const actionOpen = computed({ get: () => Boolean(target.value && mode.value), set: (v: boolean) => { if (!v) { target.value = null; mode.value = null; } } });
 const formMutation = computed(() => (editing.value ? update : create));
 
@@ -75,6 +80,12 @@ async function confirm() {
   } catch { /* el error se muestra en el diálogo */ }
 }
 const actionMutation = computed(() => (mode.value === 'finalize' ? finalize : correct));
+function askVoid(interview: Interview) { voidTarget.value = interview; voidReason.value = ''; voidError.value = null; voidInterview.reset(); voidOpen.value = true; }
+async function submitVoid() {
+  voidError.value = voidReason.value.trim().length < 5 ? 'Indique el motivo de la anulación (al menos 5 caracteres).' : maxLength(1000)(voidReason.value);
+  if (voidError.value || !voidTarget.value) return;
+  try { await voidInterview.mutateAsync({ id: voidTarget.value.id, expectedVersion: voidTarget.value.version, reason: voidReason.value.trim() }); voidOpen.value = false; } catch { /* el error se muestra en el diálogo */ }
+}
 </script>
 
 <template>
@@ -87,27 +98,30 @@ const actionMutation = computed(() => (mode.value === 'finalize' ? finalize : co
         <ul class="space-y-4">
           <li v-for="item in [...data].reverse()" :key="item.id" class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-start justify-between gap-2">
-              <div>
+              <div class="min-w-0 flex-1">
                 <p class="text-sm font-semibold text-slate-900">{{ formatDateTime(item.occurredAt) }} <span class="font-normal text-slate-500">· {{ modalityLabel(item.modalityCode) }}</span></p>
                 <p class="mt-0.5 text-xs text-slate-500">Entrevistó: {{ nameOf(item.interviewerUserId, 'Persona no disponible') }}</p>
               </div>
-              <StatusBadge :status="item.status" />
+              <div class="flex items-center gap-2">
+                <StatusBadge :status="item.status" />
+                <div class="flex items-center gap-1">
+                  <template v-if="item.status === 'BORRADOR'">
+                    <Button v-if="can('interviews.update')" size="small" severity="secondary" text aria-label="Editar borrador" title="Editar borrador" @click="openForm(item)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                    <Button v-if="can('interviews.finalize')" size="small" severity="success" text aria-label="Finalizar entrevista" title="Finalizar entrevista" @click="ask(item, 'finalize')"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
+                  </template>
+                  <Button v-else-if="can('interviews.correct')" size="small" severity="secondary" text aria-label="Corregir entrevista (reabrir como borrador)" title="Corregir entrevista (reabrir como borrador)" @click="ask(item, 'correct')"><template #icon><AppIcon name="refresh" :size="16" /></template></Button>
+                  <Button v-if="can('interviews.correct')" size="small" severity="danger" text aria-label="Anular entrevista" title="Anular entrevista" @click="askVoid(item)"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+                </div>
+              </div>
             </div>
             <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-800">{{ item.summary }}</p>
             <p v-if="item.agreements" class="mt-3 whitespace-pre-line border-l-2 border-slate-200 pl-3 text-sm leading-relaxed text-slate-700"><span class="block text-xs font-medium text-slate-500">Acuerdos</span>{{ item.agreements }}</p>
             <div v-if="item.restrictedNotes" class="mt-3">
-              <Button v-if="!revealed[item.id]" label="Mostrar notas restringidas" size="small" severity="secondary" outlined @click="revealed[item.id] = true"><template #icon><AppIcon name="eye" :size="15" /></template></Button>
+              <Button v-if="!revealed[item.id]" label="Mostrar notas restringidas" size="small" severity="secondary" text @click="revealed[item.id] = true"><template #icon><AppIcon name="eye" :size="15" /></template></Button>
               <div v-else class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
                 <p class="flex items-center justify-between text-xs font-medium text-amber-900">Notas restringidas <button type="button" class="rounded underline" @click="revealed[item.id] = false">Ocultar</button></p>
                 <p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-800">{{ item.restrictedNotes }}</p>
               </div>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-              <template v-if="item.status === 'BORRADOR'">
-                <Button v-if="can('interviews.update')" label="Editar borrador" size="small" severity="secondary" outlined @click="openForm(item)" />
-                <Button v-if="can('interviews.finalize')" label="Finalizar" size="small" @click="ask(item, 'finalize')" />
-              </template>
-              <Button v-else-if="can('interviews.correct')" label="Corregir" size="small" severity="secondary" outlined @click="ask(item, 'correct')" />
             </div>
           </li>
         </ul>
@@ -146,5 +160,12 @@ const actionMutation = computed(() => (mode.value === 'finalize' ? finalize : co
         <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="reason" rows="3" auto-resize maxlength="1000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
       </FormField>
     </template>
+  </MutationDialog>
+
+  <MutationDialog v-model:visible="voidOpen" header="Anular entrevista" submit-label="Anular registro" :pending="voidInterview.isPending.value" :error="voidInterview.error.value" @submit="submitVoid" @reload="query.refetch()">
+    <p class="text-sm leading-relaxed text-slate-700">La entrevista dejará de aparecer en el expediente. La anulación y su motivo se conservarán en la trazabilidad.</p>
+    <FormField id="iv-void-reason" label="Motivo de la anulación" required :error="voidError">
+      <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="voidReason" rows="3" auto-resize maxlength="1000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
+    </FormField>
   </MutationDialog>
 </template>
