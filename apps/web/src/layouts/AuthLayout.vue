@@ -3,10 +3,11 @@ import { RouterView } from 'vue-router';
 import { isUiPreview } from '@/config/preview';
 import AppIcon from '@/components/AppIcon.vue';
 import InstitutionLogo from '@/components/InstitutionLogo.vue';
+import facade from '@/assets/colegio-fachada.webp';
 
 /**
  * Pantallas de autenticación en dos columnas. La columna institucional toma los colores del logo (azul real, dorado y blanco):
- * degradado azul con curvas finas, logo, titular, tres ideas con ícono y una nota institucional en vidrio. Las tres ideas solo
+ * degradado azul con curvas finas y la fachada del colegio difuminada al pie, logo, titular, tres ideas con ícono y una nota institucional en vidrio. Las tres ideas solo
  * se muestran si la pantalla es lo bastante grande para que el ingreso siga sin scroll. El formulario va en una tarjeta sobre un
  * fondo azul muy suave. En tablet y móvil la columna izquierda se reduce a una franja superior.
  */
@@ -22,6 +23,9 @@ const FEATURES = [
     <aside class="relative isolate overflow-hidden bg-brand text-white lg:col-span-5">
       <div class="absolute inset-0 -z-20 bg-[linear-gradient(150deg,#0a2c8c_0%,#1550c9_48%,#2f7bf2_100%)]" aria-hidden="true" />
       <div class="absolute -right-20 -top-24 -z-10 hidden h-[24rem] w-[24rem] rounded-full bg-sky-300/25 blur-3xl lg:block" aria-hidden="true" />
+      <!-- Fachada del colegio: se funde con el azul hacia arriba y queda detrás de la nota inferior -->
+      <img :src="facade" alt="" class="absolute inset-x-0 bottom-0 -z-10 hidden h-[58%] w-full object-cover object-[62%_60%] opacity-45 mix-blend-luminosity [mask-image:linear-gradient(to_top,black_0%,black_30%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_30%,transparent_100%)] lg:block" width="1000" height="667" decoding="async">
+      <div class="absolute inset-x-0 bottom-0 -z-10 hidden h-[58%] bg-[linear-gradient(to_top,rgba(10,44,140,0.55),transparent_70%)] lg:block" aria-hidden="true" />
       <svg class="absolute inset-0 -z-10 hidden h-full w-full lg:block" viewBox="0 0 800 940" preserveAspectRatio="xMidYMid slice" fill="none" aria-hidden="true" focusable="false">
         <path d="M800 120C690 150 600 250 560 380" stroke="#ffffff" stroke-opacity=".14" stroke-width="1.5" />
         <path d="M-10 560C80 620 120 760 90 960" stroke="#ffffff" stroke-opacity=".1" stroke-width="1.5" />
