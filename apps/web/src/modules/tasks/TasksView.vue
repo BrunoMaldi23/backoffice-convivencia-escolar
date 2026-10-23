@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import Button from 'primevue/button';
 import ApiErrorMessage from '@/components/ApiErrorMessage.vue';
+import AppIcon from '@/components/AppIcon.vue';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import AppTable from '@/components/AppTable.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import QueryState from '@/components/QueryState.vue';
@@ -17,15 +19,27 @@ import { formatFolio } from '@/lib/catalogs';
 import { formatDate } from '@/lib/format';
 import { isOverdueTask } from '@/lib/metrics';
 import { optionsFrom } from '@/lib/status';
-import { completeTask } from '@/services/caseOperations';
+import { completeTask, deleteTask, updateTask } from '@/services/caseOperations';
 import type { CaseTask } from '@/types/api';
 
-/** Tareas de todos los expedientes revisados. Se pueden completar desde aquí; las nuevas se crean dentro del expediente. */
+/**
+ * Tareas de todos los expedientes revisados. Desde aquí se pueden completar, cancelar (se conserva el antecedente) o eliminar definitivamente
+ * si siguen pendientes; las nuevas se crean dentro del expediente, que debe estar abierto.
+ */
 const { can, user } = useSession();
 const { nameOf } = useDirectory();
 const query = useScopedTasks({ includeClosed: true });
 const complete = useApiMutation((v: { caseId: string; id: string }) => completeTask(v.caseId, v.id), (_d, v) => caseScope(v.caseId));
 const completing = ref<string | null>(null);
+type TaskAction = { caseId: string; id: string; expectedVersion: number };
+const cancel = useApiMutation((v: TaskAction) => updateTask(v.caseId, v.id, { expectedVersion: v.expectedVersion, status: 'CANCELADA' }), (_d, v) => caseScope(v.caseId));
+const remove = useApiMutation((v: TaskAction) => deleteTask(v.caseId, v.id, v.expectedVersion), (_d, v) => caseScope(v.caseId));
+const cancelTarget = ref<ScopedRow<CaseTask> | null>(null);
+const deleteTarget = ref<ScopedRow<CaseTask> | null>(null);
+const cancelOpen = computed({ get: () => Boolean(cancelTarget.value), set: (value: boolean) => { if (!value) cancelTarget.value = null; } });
+const deleteOpen = computed({ get: () => Boolean(deleteTarget.value), set: (value: boolean) => { if (!value) deleteTarget.value = null; } });
+const actionOf = (target: ScopedRow<CaseTask> | null): TaskAction => ({ caseId: target!.case.id, id: target!.item.id, expectedVersion: target!.item.version });
+const canAct = (row: { status: string; case: { status: string } }) => row.status === 'PENDIENTE' && row.case.status !== 'CERRADO' && can('tasks.manage');
 const now = new Date();
 const search = ref('');
 const values = ref<Record<string, string | null>>({ status: 'PENDIENTE', owner: null, due: null });
@@ -67,12 +81,26 @@ async function markDone(row: Row) { completing.value = row.id; complete.reset();
             <template #cell-dueAt="{ row }"><span :class="['whitespace-nowrap tabular-nums', isOverdueTask(row.item, now) ? 'font-semibold text-red-800' : '']">{{ row.dueAt ? formatDate(row.dueAt) : '—' }}<span v-if="isOverdueTask(row.item, now)" class="sr-only"> (vencida)</span></span></template>
             <template #cell-status="{ row }"><StatusBadge :status="row.status" /></template>
             <template #actions="{ row }">
-              <Button v-if="row.status === 'PENDIENTE' && can('tasks.manage')" label="Completar" size="small" severity="secondary" outlined :loading="completing === row.id" @click="markDone(row)" />
+              <div v-if="canAct(row)" class="flex items-center gap-1">
+                <Button :loading="completing === row.id" size="small" severity="success" text aria-label="Completar tarea" title="Completar tarea" @click="markDone(row)"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
+                <Button size="small" severity="secondary" text aria-label="Cancelar tarea (se conserva en la trazabilidad)" title="Cancelar tarea (se conserva en la trazabilidad)" @click="cancelTarget = row"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
+                <Button size="small" severity="danger" text aria-label="Eliminar tarea definitivamente" title="Eliminar tarea definitivamente" @click="deleteTarget = row"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+              </div>
             </template>
             <template #empty><div class="px-6 py-10 text-center text-sm text-slate-600">Sin coincidencias. Ajuste la búsqueda o los filtros.</div></template>
           </AppTable>
         </template>
       </QueryState>
     </section>
+    <ConfirmActionDialog
+      v-model:visible="cancelOpen" header="Cancelar tarea" confirm-label="Cancelar tarea" danger
+      :message="`La tarea «${cancelTarget?.item.title ?? ''}» quedará cancelada y conservará su trazabilidad.`"
+      :action="() => cancel.mutateAsync(actionOf(cancelTarget))"
+    />
+    <ConfirmActionDialog
+      v-model:visible="deleteOpen" header="Eliminar tarea" confirm-label="Eliminar definitivamente" danger
+      :message="`Se eliminará definitivamente la tarea «${deleteTarget?.item.title ?? ''}». Dejará de aparecer en el expediente y en su línea de tiempo; solo quedará la auditoría de seguridad. Si necesita conservar el antecedente, use «Cancelar tarea».`"
+      :action="() => remove.mutateAsync(actionOf(deleteTarget))"
+    />
   </div>
 </template>
