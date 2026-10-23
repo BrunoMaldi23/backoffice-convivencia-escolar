@@ -37,7 +37,11 @@ export function useDirectory() {
     if (members.data.value) return members.data.value.map((m) => ({ value: m.id, label: m.displayName }));
     return (users.data.value?.items ?? []).filter((u) => u.isActive).map((u) => ({ value: u.id, label: u.displayName }));
   });
+  /** Todas las cuentas activas, exclusivamente para la administración de membresías. */
+  const activeUserOptions = computed(() => (users.data.value?.items ?? [])
+    .filter((u) => u.isActive)
+    .map((u) => ({ value: u.id, label: u.displayName })));
   /** Compatibilidad con las vistas que esperaban la consulta de usuarios: refleja la fuente que esté disponible. */
   const query = computed(() => (members.isSuccess.value || !usersEnabled.value ? members : users));
-  return { query, available, nameOf, options, names };
+  return { query, available, nameOf, options, activeUserOptions, names };
 }

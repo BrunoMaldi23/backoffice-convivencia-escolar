@@ -60,7 +60,7 @@ const emptyFresh = (items: StaffMember[]) => items.length === 0 && !debounced.va
             <template #cell-rut="{ row }"><span class="whitespace-nowrap tabular-nums">{{ row.rut ? formatRut(row.rut) : '—' }}</span></template>
             <template #cell-account="{ row }">{{ row.user?.displayName ?? 'Sin cuenta' }}</template>
             <template #cell-isActive="{ row }"><StatusBadge :status="row.isActive ? 'ACTIVO' : 'INACTIVO'" /></template>
-            <template v-if="can('staff.manage')" #actions="{ row }"><Button :aria-label="`Editar a ${fullName(row)}`" severity="secondary" text rounded size="small" @click="openForm(row)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button></template>
+            <template v-if="can('staff.manage')" #actions="{ row }"><Button :aria-label="`Editar a ${fullName(row)}`" :title="`Editar a ${fullName(row)}`" class="!bg-slate-100 !text-slate-700 hover:!bg-slate-200 hover:!text-slate-900" rounded size="small" @click="openForm(row)"><template #icon><AppIcon name="pencil" :size="17" /></template></Button></template>
             <template #empty><div class="px-6 py-10 text-center text-sm text-slate-600">Ningún funcionario coincide con la búsqueda o los filtros.</div></template>
           </AppTable>
         </template>

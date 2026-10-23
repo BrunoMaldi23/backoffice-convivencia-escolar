@@ -9,7 +9,7 @@ export const AUDIT_ACTIONS: Record<string, string> = {
   CASE_RESOLVED: 'Expediente resuelto', CASE_CLOSED: 'Expediente cerrado', CASE_REOPENED: 'Expediente reabierto', CASE_TRANSITIONED: 'Cambio de estado', CASE_ACCESS_GRANTED: 'Acceso concedido', CASE_ACCESS_REVOKED: 'Acceso revocado',
   REPORT_CREATED: 'Denuncia registrada', REPORT_UPDATED: 'Denuncia modificada', PARTICIPANT_CREATED: 'Involucrado creado', PARTICIPANT_LINKED: 'Involucrado asociado', PARTICIPANT_UNLINKED: 'Involucrado desvinculado',
   INTERVIEW_CREATED: 'Entrevista registrada', INTERVIEW_UPDATED: 'Entrevista modificada', INTERVIEW_FINALIZED: 'Entrevista finalizada', INTERVIEW_CORRECTED: 'Entrevista corregida',
-  DOCUMENT_UPLOADED: 'Documento cargado', PROTOCOL_CREATED: 'Protocolo creado', PROTOCOL_PUBLISHED: 'Protocolo publicado', PROTOCOL_APPLIED: 'Protocolo aplicado',
+  DOCUMENT_UPLOADED: 'Documento cargado', PROTOCOL_CREATED: 'Protocolo creado', PROTOCOL_PUBLISHED: 'Protocolo publicado', PROTOCOL_APPLIED: 'Protocolo aplicado', PROTOCOL_REVOKED: 'Aplicación de protocolo revocada',
   MEASURE_CREATED: 'Medida registrada', MEASURE_UPDATED: 'Medida actualizada', FOLLOW_UP_CREATED: 'Seguimiento registrado', TASK_CREATED: 'Tarea creada', TASK_COMPLETED: 'Tarea completada'
 };
 

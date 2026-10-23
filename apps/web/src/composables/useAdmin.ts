@@ -10,7 +10,7 @@ export const useUserList = (query: MaybeRefOrGetter<admin.UserListQuery>) =>
 export const useUser = (id: MaybeRefOrGetter<string>) => useQuery({ queryKey: computed(() => ['users', 'detail', toValue(id)]), queryFn: () => admin.getUser(toValue(id)) });
 
 const USERS: string[][] = [['users']];
-export const useCreateUser = () => useApiMutation((input: { email: string; displayName: string; roles: string[] }) => admin.createUser(input), () => USERS);
+export const useCreateUser = () => useApiMutation((input: { email: string; displayName: string; roles: string[]; establishmentId: string }) => admin.createUser(input), () => [...USERS, ['establishments', 'mine']]);
 export const useUpdateUser = () => useApiMutation((input: { id: string; email?: string; displayName?: string }) => { const { id, ...body } = input; return admin.updateUser(id, body); }, () => USERS);
 export const useSetUserStatus = () => useApiMutation((input: { id: string; isActive: boolean }) => admin.setUserStatus(input.id, input.isActive), () => [...USERS, ['audit']]);
 export const useAssignUserRoles = () => useApiMutation((input: { id: string; roles: string[] }) => admin.assignUserRoles(input.id, input.roles), () => [...USERS, ['audit']]);

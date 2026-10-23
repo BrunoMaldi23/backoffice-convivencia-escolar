@@ -49,7 +49,7 @@ describe('indicadores de expedientes', () => {
 });
 
 describe('plazos', () => {
-  const task = (over: Partial<CaseTask>): CaseTask => ({ id: 't', caseId: 'c1', createdByUserId: 'u', assignedToUserId: null, title: 'Tarea', dueAt: null, status: 'PENDIENTE', completedAt: null, createdAt: day(-9), updatedAt: day(-9), ...over });
+  const task = (over: Partial<CaseTask>): CaseTask => ({ id: 't', caseId: 'c1', createdByUserId: 'u', assignedToUserId: null, title: 'Tarea', dueAt: null, status: 'PENDIENTE', version: 1, completedAt: null, createdAt: day(-9), updatedAt: day(-9), ...over });
   const measure = (over: Partial<CaseMeasure>): CaseMeasure => ({ id: 'm', caseId: 'c1', createdByUserId: 'u', title: 'Medida', description: null, dueAt: null, status: 'PENDIENTE', version: 1, completedAt: null, createdAt: day(-9), updatedAt: day(-9), responsibles: [], ...over });
 
   it('solo las tareas y medidas pendientes pueden estar vencidas', () => {
@@ -67,7 +67,7 @@ describe('plazos', () => {
       cases: [open, closed],
       tasks: [{ caseId: open.id, item: task({ id: 't1', dueAt: day(2) }) }, { caseId: open.id, item: task({ id: 't2', dueAt: day(1), status: 'COMPLETADA' }) }],
       measures: [{ caseId: open.id, item: measure({ id: 'm1', dueAt: day(-2) }) }],
-      followUps: [{ caseId: open.id, item: { id: 'f1', caseId: open.id, createdByUserId: 'u', occurredAt: day(-1), note: 'n', nextAction: 'Llamar', nextActionDueAt: day(3), createdAt: day(-1) } }]
+      followUps: [{ caseId: open.id, item: { id: 'f1', caseId: open.id, createdByUserId: 'u', occurredAt: day(-1), note: 'n', nextAction: 'Llamar', nextActionDueAt: day(3), version: 1, createdAt: day(-1) } }]
     }, NOW);
     expect(list.map((d) => d.id)).toEqual(['measure-m1', 'task-t1', 'follow-up-f1', `case-${open.id}`]);
     expect(list[0]!.overdue).toBe(true);

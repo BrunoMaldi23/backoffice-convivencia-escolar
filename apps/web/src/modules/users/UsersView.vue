@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import MultiSelect from 'primevue/multiselect';
+import Select from 'primevue/select';
 import AppIcon from '@/components/AppIcon.vue';
 import AppTable from '@/components/AppTable.vue';
 import FormField from '@/components/FormField.vue';
@@ -12,7 +13,7 @@ import QueryState from '@/components/QueryState.vue';
 import SearchToolbar from '@/components/SearchToolbar.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import type { ColumnDef, FilterDef } from '@/components/types';
-import { useCreateUser, useUserList } from '@/composables/useAdmin';
+import { useCreateUser, useEstablishments, useUserList } from '@/composables/useAdmin';
 import { useDebounced } from '@/composables/useDebounced';
 import { useSession } from '@/composables/useSession';
 import { formatDate } from '@/lib/format';
@@ -26,6 +27,8 @@ import type { AdminUser } from '@/types/api';
  * como inactivas y el detalle ofrece las dos acciones.
  */
 const { can } = useSession();
+const canCreate = computed(() => can('users.create') && can('institutions.manage'));
+const establishments = useEstablishments(canCreate);
 const search = ref('');
 const debounced = useDebounced(search);
 const values = ref<Record<string, string | null>>({ role: null, active: null });
@@ -46,15 +49,15 @@ const rowTo = (user: AdminUser) => ({ name: 'users-detail', params: { id: user.i
 
 const createOpen = ref(false);
 const create = useCreateUser();
-const form = reactive({ displayName: '', email: '', roles: [] as string[] });
+const form = reactive({ displayName: '', email: '', roles: [] as string[], establishmentId: null as string | null });
 const errors = ref<Record<string, string>>({});
 const invited = ref<string | null>(null);
-function openCreate() { Object.assign(form, { displayName: '', email: '', roles: [] }); errors.value = {}; invited.value = null; create.reset(); createOpen.value = true; }
+function openCreate() { Object.assign(form, { displayName: '', email: '', roles: [], establishmentId: null }); errors.value = {}; invited.value = null; create.reset(); createOpen.value = true; }
 async function submit() {
-  errors.value = validateAll(form, { displayName: [required('Escriba el nombre completo.'), minLength(2), maxLength(120)], email: [required('Escriba el correo institucional.'), email(), maxLength(254)], roles: [required('Seleccione al menos un rol.')] }) as Record<string, string>;
+  errors.value = validateAll(form, { displayName: [required('Escriba el nombre completo.'), minLength(2), maxLength(120)], email: [required('Escriba el correo institucional.'), email(), maxLength(254)], roles: [required('Seleccione al menos un rol.')], establishmentId: [required('Seleccione el establecimiento al que pertenecerá la persona.')] }) as Record<string, string>;
   if (Object.keys(errors.value).length) return;
   try {
-    const user = await create.mutateAsync({ displayName: form.displayName.trim(), email: form.email.trim(), roles: form.roles });
+    const user = await create.mutateAsync({ displayName: form.displayName.trim(), email: form.email.trim(), roles: form.roles, establishmentId: form.establishmentId! });
     invited.value = user.email;
     createOpen.value = false;
   } catch { /* el error se muestra en el diálogo */ }
@@ -64,11 +67,11 @@ async function submit() {
 <template>
   <div>
     <PageHeader title="Usuarios" description="Cuentas de acceso del personal. Las cuentas nuevas se activan mediante una invitación enviada por correo.">
-      <template #actions><Button v-if="can('users.create')" label="Nuevo usuario" @click="openCreate"><template #icon><AppIcon name="user-plus" :size="16" /></template></Button></template>
+      <template #actions><Button v-if="canCreate" label="Nuevo usuario" @click="openCreate"><template #icon><AppIcon name="user-plus" :size="16" /></template></Button></template>
     </PageHeader>
 
     <p v-if="invited" class="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">
-      <AppIcon name="check-circle" :size="16" class="mt-0.5 shrink-0" />Usuario creado. Se envió una invitación a {{ invited }}; la cuenta se activará cuando la persona cree su contraseña.
+      <AppIcon name="check-circle" :size="16" class="mt-0.5 shrink-0" />Usuario creado, asignado a su establecimiento y con invitación enviada a {{ invited }}. La cuenta se activará cuando la persona cree su contraseña.
     </p>
 
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label="Usuarios">
@@ -86,12 +89,15 @@ async function submit() {
       </QueryState>
     </section>
 
-    <MutationDialog v-model:visible="createOpen" header="Nuevo usuario" submit-label="Crear e invitar" :pending="create.isPending.value" :error="create.error.value" @submit="submit">
-      <p class="rounded-md bg-sky-50 px-3 py-2 text-sm leading-relaxed text-sky-900">La cuenta queda inactiva y la persona recibe por correo un código de un solo uso para crear su contraseña. La administración nunca define ni ve contraseñas.</p>
+    <MutationDialog v-model:visible="createOpen" header="Nuevo usuario" submit-label="Crear, asignar e invitar" :pending="create.isPending.value" :error="create.error.value" @submit="submit">
+      <p class="rounded-md bg-sky-50 px-3 py-2 text-sm leading-relaxed text-sky-900">En una sola acción se crea la cuenta, se asigna al establecimiento y se envía un código de un solo uso para crear la contraseña. La administración nunca define ni ve contraseñas.</p>
       <FormField id="nu-name" label="Nombre completo" required :error="errors.displayName"><template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.displayName" maxlength="120" :invalid="invalid" :aria-describedby="describedby" autocomplete="off" class="w-full" /></template></FormField>
       <FormField id="nu-email" label="Correo institucional" required :error="errors.email"><template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.email" type="email" maxlength="254" :invalid="invalid" :aria-describedby="describedby" autocomplete="off" class="w-full" /></template></FormField>
       <FormField id="nu-roles" label="Roles" required help="El rol de administración del sistema no se concede al crear cuentas." :error="errors.roles">
         <template #default="{ id, invalid, describedby }"><MultiSelect v-model="form.roles" :input-id="id" :options="creatableRoleOptions" option-label="label" option-value="value" display="chip" :invalid="invalid" :aria-describedby="describedby" placeholder="Seleccione uno o más roles" class="w-full" /></template>
+      </FormField>
+      <FormField id="nu-establishment" label="Establecimiento" required help="La persona podrá acceder solo a los datos de este establecimiento." :error="errors.establishmentId">
+        <template #default="{ id, invalid, describedby }"><Select v-model="form.establishmentId" :input-id="id" :options="establishments.data.value?.filter((item) => item.isActive) ?? []" option-label="name" option-value="id" :loading="establishments.isPending.value" :invalid="invalid" :aria-describedby="describedby" placeholder="Seleccione el establecimiento" class="w-full" /></template>
       </FormField>
     </MutationDialog>
   </div>

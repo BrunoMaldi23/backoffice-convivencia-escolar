@@ -11,6 +11,7 @@ import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
 import { useAllCases } from '@/composables/useCases';
 import { CATEGORY_OPTIONS, categoryLabel } from '@/lib/catalogs';
+import { serializeCsv } from '@/lib/csv';
 import { formatNumber } from '@/lib/format';
 import { casesByMonth, computeCaseMetrics } from '@/lib/metrics';
 import { priorityOf, statusOf } from '@/lib/status';
@@ -44,13 +45,28 @@ const summary = computed(() => [
   ['Expedientes en el período', filtered.value.length], ['Activos', metrics.value.active.length], ['Cerrados', metrics.value.closed],
   ['Activos con prioridad crítica', metrics.value.critical.length], ['Activos con la próxima acción vencida', metrics.value.overdueActions.length]
 ] as const);
+
+function exportCsv() {
+  const rows: string[][] = [
+    ['Indicador', 'Cantidad'], ...summary.value.map(([label, value]) => [label, String(value)]), [],
+    ['Estado', 'Cantidad'], ...byStatus.value.map(({ label, value }) => [label, String(value)]), [],
+    ['Categoría', 'Cantidad'], ...byCategory.value.map(({ label, value }) => [label, String(value)]), [],
+    ['Prioridad', 'Cantidad'], ...byPriority.value.map(({ label, value }) => [label, String(value)])
+  ];
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(new Blob([serializeCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+  link.href = url;
+  link.download = 'reporte-convivencia-escolar.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
 </script>
 
 <template>
   <div>
     <PageHeader title="Reportes" description="Indicadores de convivencia escolar calculados con los expedientes a los que usted tiene acceso.">
       <template #actions>
-        <Button label="Exportar" severity="secondary" outlined disabled title="La API todavía no ofrece exportación"><template #icon><AppIcon name="download" :size="16" /></template></Button>
+        <Button label="Exportar CSV" severity="secondary" outlined :disabled="query.isPending.value || !filtered.length" @click="exportCsv"><template #icon><AppIcon name="download" :size="16" /></template></Button>
       </template>
     </PageHeader>
 
@@ -61,7 +77,7 @@ const summary = computed(() => [
       <FormField id="rep-categoria" label="Categoría">
         <template #default="{ id }"><Select v-model="category" :input-id="id" :options="CATEGORY_OPTIONS" option-label="label" option-value="value" placeholder="Todas" show-clear class="w-full" /></template>
       </FormField>
-      <p class="text-xs leading-relaxed text-slate-500">La exportación requiere un endpoint del servidor que aún no existe. Los datos se calculan en el navegador con los expedientes consultados<span v-if="query.data.value?.truncated"> ({{ query.data.value.items.length }} de {{ query.data.value.total }})</span>.</p>
+      <p class="text-xs leading-relaxed text-slate-500">Exporte indicadores agregados según los filtros aplicados<span v-if="query.data.value?.truncated">; se consideran {{ query.data.value.items.length }} de {{ query.data.value.total }} expedientes autorizados</span>.</p>
     </div>
 
     <QueryState :data="query.data.value?.items" :is-pending="query.isPending.value" :error="query.error.value" subject="los reportes" empty-icon="chart" empty-title="Aún no hay expedientes" empty-description="Los reportes se calculan a partir de los expedientes registrados." @retry="query.refetch()">

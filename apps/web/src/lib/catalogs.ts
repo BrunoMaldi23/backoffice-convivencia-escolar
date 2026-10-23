@@ -74,11 +74,11 @@ export function transitionLabel(from: CaseStatus, to: CaseStatus): string {
 export const EVENT_LABELS: Record<CaseEventType, string> = {
   CASE_CREATED: 'Expediente creado', CASE_UPDATED: 'Expediente actualizado', CASE_ASSIGNED: 'Responsable asignado', CASE_STAGE_CHANGED: 'Etapa modificada',
   CASE_TRANSITIONED: 'Cambio de estado', CASE_PAUSED: 'Expediente pausado', CASE_RESUMED: 'Expediente reanudado', CASE_RESOLVED: 'Expediente resuelto',
-  CASE_CLOSED: 'Expediente cerrado', CASE_REOPENED: 'Expediente reabierto', REPORT_CREATED: 'Denuncia registrada', REPORT_UPDATED: 'Denuncia modificada',
-  PARTICIPANT_LINKED: 'Involucrado asociado', PARTICIPANT_UNLINKED: 'Involucrado desvinculado', INTERVIEW_CREATED: 'Entrevista registrada',
-  INTERVIEW_FINALIZED: 'Entrevista finalizada', INTERVIEW_CORRECTED: 'Entrevista reabierta para corrección', DOCUMENT_UPLOADED: 'Documento cargado',
-  PROTOCOL_APPLIED: 'Protocolo aplicado', MEASURE_CREATED: 'Medida registrada', MEASURE_UPDATED: 'Medida actualizada', FOLLOW_UP_CREATED: 'Seguimiento registrado',
-  TASK_CREATED: 'Tarea creada', TASK_COMPLETED: 'Tarea completada', NOTIFICATION_CREATED: 'Notificación emitida', SUMMONS_CREATED: 'Citación registrada',
+  CASE_CLOSED: 'Expediente cerrado', CASE_REOPENED: 'Expediente reabierto', REPORT_CREATED: 'Denuncia registrada', REPORT_UPDATED: 'Denuncia modificada', REPORT_VOIDED: 'Denuncia anulada',
+  PARTICIPANT_LINKED: 'Involucrado asociado', PARTICIPANT_UPDATED: 'Participación actualizada', PARTICIPANT_UNLINKED: 'Involucrado desvinculado', INTERVIEW_CREATED: 'Entrevista registrada',
+  INTERVIEW_FINALIZED: 'Entrevista finalizada', INTERVIEW_CORRECTED: 'Entrevista reabierta para corrección', INTERVIEW_VOIDED: 'Entrevista anulada', DOCUMENT_UPLOADED: 'Documento cargado', DOCUMENT_VOIDED: 'Documento anulado',
+  PROTOCOL_APPLIED: 'Protocolo aplicado', PROTOCOL_REVOKED: 'Aplicación de protocolo revocada', MEASURE_CREATED: 'Medida registrada', MEASURE_UPDATED: 'Medida actualizada', FOLLOW_UP_CREATED: 'Seguimiento registrado', FOLLOW_UP_VOIDED: 'Seguimiento anulado',
+  TASK_CREATED: 'Tarea creada', TASK_UPDATED: 'Tarea actualizada', TASK_COMPLETED: 'Tarea completada', TASK_CANCELLED: 'Tarea cancelada', NOTIFICATION_CREATED: 'Notificación emitida', SUMMONS_CREATED: 'Citación registrada',
   SUMMONS_UPDATED: 'Citación actualizada', REFERRAL_CREATED: 'Derivación registrada', REFERRAL_UPDATED: 'Derivación actualizada'
 };
 export const eventLabel = (type: string) => EVENT_LABELS[type as CaseEventType] ?? type.replace(/_/g, ' ').toLowerCase();

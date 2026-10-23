@@ -6,7 +6,7 @@ Todas las rutas requieren `bce_session`; las escrituras también `X-CSRF-Token`.
 | --- | --- | --- |
 | GET `/api/users` | `users.read` | Query `page` (desde 1), `limit` (1–100, por defecto 20), `search`, `role`, `active=true|false`; `{items,total,page,limit}` |
 | GET `/api/users/:id` | `users.read` | Usuario o 404 |
-| POST `/api/users` | `users.create` | `{email,displayName,roles:string[]}`; 201 usuario inactivo e invitación SMTP |
+| POST `/api/users` | `users.create` e `institutions.manage` | `{email,displayName,roles:string[],establishmentId}`; 201 usuario inactivo, membresía activa e invitación SMTP |
 | PATCH `/api/users/:id` | `users.update` | Solo `email` y/o `displayName`; 200 usuario |
 | PATCH `/api/users/:id/status` | `users.disable` | `{isActive:boolean}`; 200 usuario |
 | PATCH `/api/users/:id/roles` | `roles.assign` | `{roles:string[]}`; 200 usuario, revoca sesiones |
@@ -16,7 +16,7 @@ Todas las rutas requieren `bce_session`; las escrituras también `X-CSRF-Token`.
 | GET `/api/roles/:id` | `roles.read` | Rol o 404 |
 | GET `/api/permissions` | `roles.read` | Lista `{id,code,description}` |
 
-La creación no recibe contraseña; el funcionario la establece con un código recibido por correo. El administrador no ve ese código. Una cuenta con invitación pendiente no puede activarse por el endpoint de estado. `SYSTEM_ADMIN` no puede autoasignarse y solo un administrador activo puede concederlo a otra cuenta. Los cambios de rol revocan sesiones. El último administrador activo no puede desactivarse ni perder ese rol; la operación responde 409. No existe DELETE.
+La creación no recibe contraseña: en una sola transacción crea la cuenta, sus roles, la membresía activa del establecimiento indicado y el código de invitación. El funcionario establece su contraseña con el código recibido por correo; el administrador no ve ese código. Si el establecimiento no existe o está inactivo, no se crea la cuenta. Una cuenta con invitación pendiente no puede activarse por el endpoint de estado. `SYSTEM_ADMIN` no puede autoasignarse y solo un administrador activo puede concederlo a otra cuenta. Los cambios de rol revocan sesiones. El último administrador activo no puede desactivarse ni perder ese rol; la operación responde 409. No existe DELETE.
 
 Matriz inicial: `SYSTEM_ADMIN` tiene los ocho permisos administrativos listados abajo; `DIRECTOR` tiene `dashboard.read`, `users.read`, `roles.read`, `audit.read`; `AUDITOR` tiene `dashboard.read` y `audit.read`; los demás roles tienen solo `dashboard.read`. El seed no reasigna permisos después de su primera ejecución. Ningún rol obtiene acceso automático a expedientes futuros.
 

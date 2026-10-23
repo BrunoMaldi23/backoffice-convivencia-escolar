@@ -17,6 +17,7 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
   const employeeEmail = `empleado-${randomBytes(8).toString('hex')}@test.local`;
   const adminPassword = randomBytes(24).toString('base64url');
   let adminId: string;
+  let establishmentId: string;
   let agent: ReturnType<typeof request.agent>;
   let csrf: string;
   let employeePassword: string;
@@ -28,6 +29,8 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init(); db = app.get(DatabaseService);
     const role = await db!.role.findUniqueOrThrow({ where: { name: 'SYSTEM_ADMIN' } });
+    const establishment = await db!.establishment.create({ data: { code: `TEST-${randomBytes(4).toString('hex')}`, name: 'Establecimiento de prueba' } });
+    establishmentId = establishment.id;
     const admin = await db!.user.create({ data: { email: adminEmail, displayName: 'Administrador de prueba', passwordHash: await argon2.hash(adminPassword, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 }), roles: { create: { roleId: role.id } } } });
     adminId = admin.id; ids.push(adminId);
     agent = request.agent(app.getHttpServer());
@@ -38,6 +41,7 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     if (db && ids.length) {
       await db.securityAudit.deleteMany({ where: { OR: [{ actorUserId: { in: ids } }, { targetId: { in: ids } }] } });
       await db.user.deleteMany({ where: { id: { in: ids } } });
+      await db.establishment.deleteMany({ where: { id: establishmentId } });
     }
     if (app) await app.close();
   });
@@ -68,11 +72,12 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     expect(perms.body.some((p: { code: string }) => p.code === 'users.read')).toBe(true);
   });
   it('invita, activa y administra usuario con RBAC', async () => {
-    const created = await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email: employeeEmail.toUpperCase(), displayName: 'Empleado de prueba', roles: ['DOCENTE'] }).expect(201);
+    const created = await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email: employeeEmail.toUpperCase(), displayName: 'Empleado de prueba', roles: ['DOCENTE'], establishmentId }).expect(201);
     const id = created.body.id as string; ids.push(id);
     expect(created.body.isActive).toBe(false);
     expect(JSON.stringify(created.body)).not.toMatch(/passwordHash|tokenHash/);
-    await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email: employeeEmail, displayName: 'Duplicado', roles: ['DOCENTE'] }).expect(409);
+    expect(await db!.establishmentMembership.findUnique({ where: { establishmentId_userId: { establishmentId, userId: id } } })).toMatchObject({ isActive: true });
+    await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email: employeeEmail, displayName: 'Duplicado', roles: ['DOCENTE'], establishmentId }).expect(409);
     const code = await mailCode(employeeEmail);
     employeePassword = randomBytes(24).toString('base64url');
     await request(server()).post('/api/auth/accept-invitation').send({ token: code, password: employeePassword }).expect(201);
@@ -102,7 +107,7 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
   });
   it('rechaza invitación vencida y evita activación manual de cuenta pendiente', async () => {
     const email = `pendiente-${randomBytes(8).toString('hex')}@test.local`;
-    const created = await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email, displayName: 'Pendiente de prueba', roles: ['DOCENTE'] }).expect(201);
+    const created = await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email, displayName: 'Pendiente de prueba', roles: ['DOCENTE'], establishmentId }).expect(201);
     ids.push(created.body.id as string);
     await agent.patch(`/api/users/${created.body.id}/status`).set('X-CSRF-Token', csrf).send({ isActive: true }).expect(409);
     const code = await mailCode(email);

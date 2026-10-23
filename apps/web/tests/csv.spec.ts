@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBirthDate, parseCsv, parseStudentsCsv } from '../src/lib/csv';
+import { normalizeBirthDate, parseCsv, parseStudentsCsv, serializeCsv } from '../src/lib/csv';
 import { calendarToDate, dateToCalendar, formatCalendarDate } from '../src/lib/format';
 
 describe('parseCsv', () => {
@@ -11,6 +11,13 @@ describe('parseCsv', () => {
   });
   it('ignora las líneas vacías', () => {
     expect(parseCsv('a;b\n\n1;2\n;\n')).toEqual([['a', 'b'], ['1', '2']]);
+  });
+});
+
+describe('serializeCsv', () => {
+  it('genera CSV compatible con Excel y protege separadores, comillas y saltos de línea', () => {
+    expect(serializeCsv([['Nombre', 'Detalle'], ['Caso; uno', 'Dijo "hola"\ny continuó']]))
+      .toBe('﻿Nombre;Detalle\r\n"Caso; uno";"Dijo ""hola""\ny continuó"\r\n');
   });
 });
 

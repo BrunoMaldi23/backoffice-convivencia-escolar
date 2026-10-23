@@ -1,6 +1,8 @@
 # Backoffice Convivencia Escolar
 
-Sistema interno de un establecimiento chileno. La Fase 0 aportó Vue, NestJS, Prisma, PostgreSQL y Docker Compose. El backend de Fase 1A agrega autenticación, usuarios, RBAC, auditoría, invitaciones y recuperación. Las interfaces de esas funciones aún están pendientes.
+Sistema interno de un establecimiento educacional chileno para gestionar convivencia escolar. Incluye autenticación, usuarios, roles, invitaciones, establecimientos y membresías; expedientes, denuncias, entrevistas, medidas, tareas, seguimientos, documentos, evidencias audiovisuales por enlace institucional, comunidad educativa, citaciones, derivaciones, calendario y reportes.
+
+La documentación de uso y formalización está en [docs/operacion](docs/operacion/README.md). Los contratos técnicos vigentes están en [docs/api](docs/api/README.md). Los informes de fases anteriores se preservan como antecedentes y no sustituyen los manuales operativos actuales.
 
 ## Requisitos
 
@@ -44,4 +46,4 @@ docker compose up -d
 
 No ejecute `docker compose down -v`: borraría el volumen persistente. Compose monta el código de API y web para recarga, y mantiene `node_modules` Linux en volúmenes separados. La API sincroniza las dependencias del lockfile y regenera Prisma Client al arrancar, evitando enlaces obsoletos de pnpm.
 
-Contratos para Vue: [autenticación](docs/api/auth-contract.md), [usuarios y roles](docs/api/users-roles-contract.md), [recuperación e invitación](docs/api/password-recovery-contract.md), [auditoría](docs/api/audit-contract.md). Decisiones de seguridad en [Fase 1A](docs/security/phase-1a-decisions.md).
+Contratos para Vue: [autenticación](docs/api/auth-contract.md), [usuarios y roles](docs/api/users-roles-contract.md), [recuperación e invitación](docs/api/password-recovery-contract.md), [auditoría](docs/api/audit-contract.md), [expedientes](docs/api/backend-contracts.md) y [comunidad educativa](docs/api/community-contract.md). Decisiones de seguridad en [Fase 1A](docs/security/phase-1a-decisions.md).

@@ -162,12 +162,14 @@ describe('documentos privados', () => {
   it('sube, lista y descarga como binario autorizado', async () => {
     const record = caseWith('ABIERTO');
     const file = new File(['%PDF-1.4\ncontenido de prueba'], 'informe.pdf', { type: 'application/pdf' });
-    const uploaded = await ops.uploadDocument(record.id, { kind: 'EVIDENCIA', file });
-    expect(uploaded).toMatchObject({ originalFilename: 'informe.pdf', kind: 'EVIDENCIA', sizeBytes: file.size });
+    const uploaded = await ops.uploadDocument(record.id, { kind: 'DOCUMENTO', file });
+    expect(uploaded).toMatchObject({ originalFilename: 'informe.pdf', kind: 'DOCUMENTO', sizeBytes: file.size });
     expect(JSON.stringify(uploaded)).not.toContain('storageKey');
     expect((await ops.listDocuments(record.id)).some((d) => d.id === uploaded.id)).toBe(true);
     const blob = await ops.downloadDocument(record.id, uploaded.id);
     expect(await blob.text()).toContain('contenido de prueba');
+    const video = await ops.linkVideoEvidence(record.id, { title: 'Extracto cámara patio', externalUrl: 'https://colegio.sharepoint.com/:v:/s/Convivencia/Ejemplo' });
+    expect(video).toMatchObject({ kind: 'EVIDENCIA', originalFilename: 'Extracto cámara patio', sizeBytes: 0, externalUrl: 'https://colegio.sharepoint.com/:v:/s/Convivencia/Ejemplo' });
   });
 
   it('el servidor rechaza con 413 los cuerpos grandes y la interfaz lo explica', async () => {
@@ -198,23 +200,23 @@ describe('permisos por rol (el servidor es la autoridad)', () => {
     expect((await admin.listUsers()).total).toBeGreaterThan(0);
     expect((await admin.listAudit()).items.length).toBeGreaterThan(0);
     expect(httpStatus(await rejection(cases.listCases()))).toBe(403);
-    expect(httpStatus(await rejection(admin.createUser({ email: 'x@demo.invalid', displayName: 'Persona X', roles: ['DOCENTE'] })))).toBe(403);
+    expect(httpStatus(await rejection(admin.createUser({ email: 'x@demo.invalid', displayName: 'Persona X', roles: ['DOCENTE'], establishmentId: fake.db.establishments[0]!.id })))).toBe(403);
   });
 
   it('el servidor no concede SYSTEM_ADMIN al crear cuentas', async () => {
-    const error = await rejection(admin.createUser({ email: 'adm@demo.invalid', displayName: 'Nueva administración', roles: ['SYSTEM_ADMIN'] }));
+    const error = await rejection(admin.createUser({ email: 'adm@demo.invalid', displayName: 'Nueva administración', roles: ['SYSTEM_ADMIN'], establishmentId: fake.db.establishments[0]!.id }));
     expect(httpStatus(error)).toBe(403);
   });
 });
 
 describe('administración de usuarios', () => {
   it('crea una cuenta inactiva por invitación y permite reenviarla, pero no activarla a mano si es nueva', async () => {
-    const created = await admin.createUser({ email: 'Nueva@Demo.invalid', displayName: 'Persona nueva', roles: ['CONVIVENCIA'] });
+    const created = await admin.createUser({ email: 'Nueva@Demo.invalid', displayName: 'Persona nueva', roles: ['CONVIVENCIA'], establishmentId: fake.db.establishments[0]!.id });
     expect(created).toMatchObject({ email: 'nueva@demo.invalid', isActive: false });
     await expect(admin.resendInvitation(created.id)).resolves.toBeUndefined();
     const activeUser = fake.db.users.find((u) => u.isActive && u.id !== fake.db.me.id)!;
     expect(isConflict(await rejection(admin.resendInvitation(activeUser.id)))).toBe(true);
-    expect(isConflict(await rejection(admin.createUser({ email: 'nueva@demo.invalid', displayName: 'Duplicada', roles: ['DOCENTE'] })))).toBe(true);
+    expect(isConflict(await rejection(admin.createUser({ email: 'nueva@demo.invalid', displayName: 'Duplicada', roles: ['DOCENTE'], establishmentId: fake.db.establishments[0]!.id })))).toBe(true);
   });
 
   it('filtra y busca usuarios en el servidor', async () => {

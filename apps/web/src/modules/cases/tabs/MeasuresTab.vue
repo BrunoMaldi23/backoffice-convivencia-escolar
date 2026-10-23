@@ -32,10 +32,12 @@ const create = useCreateMeasure(props.caseRecord.id);
 const update = useUpdateMeasure(props.caseRecord.id);
 
 const open = ref(false);
+const editing = ref<CaseMeasure | null>(null);
 const form = reactive({ title: '', description: '', dueAt: null as Date | null, responsibles: [] as string[], pick: null as string | null });
 const errors = ref<Record<string, string>>({});
 const today = new Date();
 const closed = computed(() => props.caseRecord.status === 'CERRADO');
+const formMutation = computed(() => editing.value ? update : create);
 
 const changing = ref<{ measure: CaseMeasure; status: MeasureStatus } | null>(null);
 const changeOpen = computed({ get: () => Boolean(changing.value), set: (v: boolean) => { if (!v) changing.value = null; } });
@@ -43,13 +45,14 @@ const dueTarget = ref<CaseMeasure | null>(null);
 const dueValue = ref<Date | null>(null);
 const dueOpen = computed({ get: () => Boolean(dueTarget.value), set: (v: boolean) => { if (!v) dueTarget.value = null; } });
 
-function openForm() { Object.assign(form, { title: '', description: '', dueAt: null, responsibles: [], pick: null }); errors.value = {}; create.reset(); open.value = true; }
+function openForm(measure: CaseMeasure | null = null) { editing.value = measure; Object.assign(form, measure ? { title: measure.title, description: measure.description ?? '', dueAt: isoToDate(measure.dueAt), responsibles: measure.responsibles.map((responsible) => responsible.userId), pick: null } : { title: '', description: '', dueAt: null, responsibles: [], pick: null }); errors.value = {}; create.reset(); update.reset(); open.value = true; }
 function addResponsible() { if (form.pick && !form.responsibles.includes(form.pick)) form.responsibles.push(form.pick); form.pick = null; }
 async function submit() {
   errors.value = validateAll(form, { title: [required('Escriba el nombre de la medida.'), minLength(3), maxLength(300)], description: [maxLength(4000)] }) as Record<string, string>;
   if (Object.keys(errors.value).length) return;
   try {
-    await create.mutateAsync({ title: form.title.trim(), ...(form.description.trim() ? { description: form.description.trim() } : {}), ...(form.dueAt ? { dueAt: dateToIso(form.dueAt) } : {}), responsibleUserIds: form.responsibles });
+    if (editing.value) await update.mutateAsync({ id: editing.value.id, expectedVersion: editing.value.version, title: form.title.trim(), description: form.description.trim() || null, dueAt: form.dueAt ? dateToIso(form.dueAt) : null, responsibleUserIds: form.responsibles });
+    else await create.mutateAsync({ title: form.title.trim(), ...(form.description.trim() ? { description: form.description.trim() } : {}), ...(form.dueAt ? { dueAt: dateToIso(form.dueAt) } : {}), responsibleUserIds: form.responsibles });
     open.value = false;
   } catch { /* el error se muestra en el diálogo */ }
 }
@@ -60,7 +63,7 @@ function editDue(measure: CaseMeasure) { dueTarget.value = measure; dueValue.val
 <template>
   <SectionCard dense title="Medidas de resguardo" description="Medidas adoptadas, sus responsables y plazos.">
     <template v-if="can('measures.manage')" #actions>
-      <Button label="Registrar medida" size="small" :disabled="closed" :title="closed ? 'Reabra el expediente para registrar medidas' : undefined" @click="openForm"><template #icon><AppIcon name="plus" :size="15" /></template></Button>
+      <Button label="Registrar medida" size="small" :disabled="closed" :title="closed ? 'Reabra el expediente para registrar medidas' : undefined" @click="openForm()"><template #icon><AppIcon name="plus" :size="15" /></template></Button>
     </template>
     <p v-if="closed" class="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">El expediente está cerrado: reábralo para registrar medidas nuevas.</p>
     <QueryState :data="query.data.value" :is-pending="query.isPending.value" :error="query.error.value" compact empty-title="Sin medidas registradas" empty-description="Registre las medidas de resguardo acordadas para este caso." empty-icon="shield" subject="las medidas" @retry="query.refetch()">
@@ -74,7 +77,8 @@ function editDue(measure: CaseMeasure) { dueTarget.value = measure; dueValue.val
                 <div v-if="can('measures.manage')" class="flex items-center gap-1">
                   <template v-if="m.status === 'PENDIENTE'">
                     <Button size="small" severity="success" text aria-label="Marcar medida como cumplida" title="Marcar medida como cumplida" @click="changing = { measure: m, status: 'COMPLETADA' }"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
-                    <Button size="small" severity="secondary" text aria-label="Cambiar plazo de la medida" title="Cambiar plazo de la medida" @click="editDue(m)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                    <Button size="small" severity="secondary" text aria-label="Editar medida" title="Editar medida" @click="openForm(m)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                    <Button size="small" severity="secondary" text aria-label="Cambiar plazo de la medida" title="Cambiar plazo de la medida" @click="editDue(m)"><template #icon><AppIcon name="calendar" :size="16" /></template></Button>
                     <Button size="small" severity="danger" text aria-label="Cancelar medida" title="Cancelar medida" @click="changing = { measure: m, status: 'CANCELADA' }"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
                   </template>
                   <Button v-else size="small" severity="secondary" text aria-label="Reabrir medida como pendiente" title="Reabrir medida como pendiente" @click="changing = { measure: m, status: 'PENDIENTE' }"><template #icon><AppIcon name="refresh" :size="16" /></template></Button>
@@ -93,7 +97,7 @@ function editDue(measure: CaseMeasure) { dueTarget.value = measure; dueValue.val
     </QueryState>
   </SectionCard>
 
-  <MutationDialog v-model:visible="open" header="Registrar medida de resguardo" submit-label="Registrar" :pending="create.isPending.value" :error="create.error.value" @submit="submit" @reload="query.refetch()">
+  <MutationDialog v-model:visible="open" :header="editing ? 'Editar medida de resguardo' : 'Registrar medida de resguardo'" :submit-label="editing ? 'Guardar cambios' : 'Registrar'" :pending="formMutation.isPending.value" :error="formMutation.error.value" @submit="submit" @reload="query.refetch()">
     <FormField id="ms-title" label="Medida" required :error="errors.title">
       <template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.title" maxlength="300" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
     </FormField>

@@ -93,7 +93,7 @@ const dialog = computed({ get: () => Boolean(selected.value), set: (v: boolean) 
         <div v-if="view === 'month'" class="hidden md:block">
           <div class="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600"><div v-for="d in WEEKDAYS" :key="d" class="px-2 py-2">{{ d }}</div></div>
           <div class="grid grid-cols-7">
-            <div v-for="d in days" :key="dayKey(d)" :class="['min-h-28 border-b border-r border-slate-100 p-1.5 [&:nth-child(7n)]:border-r-0', d.getMonth() === cursor.getMonth() ? '' : 'bg-slate-50/70']">
+            <div v-for="d in days" :key="dayKey(d)" :class="['min-h-24 border-b border-r border-slate-100 p-1.5 [&:nth-child(7n)]:border-r-0', d.getMonth() === cursor.getMonth() ? '' : 'bg-slate-50/70']">
               <p :class="['mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums', dayKey(d) === todayKey ? 'bg-sky-700 font-semibold text-white' : d.getMonth() === cursor.getMonth() ? 'text-slate-700' : 'text-slate-400']">{{ d.getDate() }}</p>
               <ul class="space-y-1">
                 <li v-for="e in (byDay.get(dayKey(d)) ?? []).slice(0, 3)" :key="e.id">

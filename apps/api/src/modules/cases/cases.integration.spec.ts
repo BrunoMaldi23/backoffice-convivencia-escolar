@@ -5,7 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { randomBytes } from 'node:crypto';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const request: typeof import('supertest') = require('supertest');
-import { CaseAccessLevel, CaseStatus } from '@prisma/client';
+import { CaseAccessLevel, CaseEventType, CaseStatus } from '@prisma/client';
 import { AppModule } from '../../app.module';
 import { DatabaseService } from '../../database/database.service';
 
@@ -166,5 +166,11 @@ describe('Casos HTTP con PostgreSQL', () => {
     await transition(CaseStatus.EN_EVALUACION, 5, 'Reapertura justificada').expect(201);
     const timeline = await writer.agent.get(`/api/cases/${created.body.id}/timeline`).expect(200);
     expect(timeline.body.items.map((event: { eventType: string }) => event.eventType)).toEqual(expect.arrayContaining(['CASE_RESOLVED', 'CASE_CLOSED', 'CASE_REOPENED']));
+    expect(timeline.body.items[0]).toMatchObject({ eventType: 'CASE_REOPENED' });
+    await db.caseEvent.create({ data: { caseId: created.body.id, actorUserId: writer.userId, eventType: CaseEventType.NOTIFICATION_CREATED, correlationId: '00000000-0000-4000-8000-000000000001' } });
+    const relevantTimeline = await writer.agent.get(`/api/cases/${created.body.id}/timeline`).expect(200);
+    const fullTimeline = await writer.agent.get(`/api/cases/${created.body.id}/timeline?mode=all`).expect(200);
+    expect(relevantTimeline.body.items.map((event: { eventType: string }) => event.eventType)).not.toContain('NOTIFICATION_CREATED');
+    expect(fullTimeline.body.items.map((event: { eventType: string }) => event.eventType)).toContain('NOTIFICATION_CREATED');
   });
 });

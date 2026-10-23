@@ -4,7 +4,7 @@ import { TONE_ICONS, type Tone } from '@/lib/status';
 import AppIcon from './AppIcon.vue';
 
 import type { TimelineEntry } from './types';
-defineProps<{ entries: TimelineEntry[] }>();
+withDefaults(defineProps<{ entries: TimelineEntry[]; compact?: boolean }>(), { compact: false });
 
 const dotClass: Record<Tone, string> = {
   neutral: 'text-slate-500 bg-slate-100', info: 'text-sky-700 bg-sky-50', progress: 'text-indigo-700 bg-indigo-50',
@@ -14,7 +14,7 @@ const dotClass: Record<Tone, string> = {
 
 <template>
   <ol class="relative">
-    <li v-for="(entry, index) in entries" :key="entry.id" class="relative flex gap-4 pb-6 last:pb-0">
+    <li v-for="(entry, index) in entries" :key="entry.id" :class="['relative flex gap-4 last:pb-0', compact ? 'pb-4' : 'pb-6']">
       <span v-if="index < entries.length - 1" class="absolute left-[15px] top-8 h-[calc(100%-2rem)] w-px bg-slate-200" aria-hidden="true" />
       <span :class="['relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-white', dotClass[entry.tone ?? 'neutral']]">
         <AppIcon :name="TONE_ICONS[entry.tone ?? 'neutral']" :size="15" />

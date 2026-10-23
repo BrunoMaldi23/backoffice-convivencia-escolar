@@ -51,20 +51,20 @@ async function submit() {
 }
 
 // Cierre o reprogramación de una citación programada
-const acting = ref<{ summons: CaseSummons; mode: 'REPROGRAMAR' | SummonsStatus } | null>(null);
+const acting = ref<{ summons: CaseSummons; mode: 'EDITAR' | SummonsStatus } | null>(null);
 const actOpen = computed({ get: () => Boolean(acting.value), set: (v: boolean) => { if (!v) acting.value = null; } });
-const act = reactive({ scheduledAt: null as Date | null, location: '', note: '' });
+const act = reactive({ scheduledAt: null as Date | null, location: '', reason: '', note: '' });
 const actErrors = ref<Record<string, string>>({});
-const ACTION_TITLES: Record<string, string> = { REPROGRAMAR: 'Reprogramar citación', REALIZADA: 'Registrar reunión realizada', NO_ASISTIO: 'Registrar inasistencia', CANCELADA: 'Cancelar citación' };
-function openAct(summons: CaseSummons, mode: 'REPROGRAMAR' | SummonsStatus) { acting.value = { summons, mode }; Object.assign(act, { scheduledAt: isoToDate(summons.scheduledAt), location: summons.location, note: '' }); actErrors.value = {}; update.reset(); }
+const ACTION_TITLES: Record<string, string> = { EDITAR: 'Editar citación', REALIZADA: 'Registrar reunión realizada', NO_ASISTIO: 'Registrar inasistencia', CANCELADA: 'Cancelar citación' };
+function openAct(summons: CaseSummons, mode: 'EDITAR' | SummonsStatus) { acting.value = { summons, mode }; Object.assign(act, { scheduledAt: isoToDate(summons.scheduledAt), location: summons.location, reason: summons.reason, note: '' }); actErrors.value = {}; update.reset(); }
 async function submitAct() {
   const current = acting.value;
   if (!current) return;
-  const reschedule = current.mode === 'REPROGRAMAR';
-  actErrors.value = validateAll(act, { scheduledAt: reschedule ? [required('Indique la nueva fecha y hora.')] : [], location: reschedule ? [required('Indique el lugar.'), minLength(2), maxLength(200)] : [], note: current.mode === 'CANCELADA' ? [required('Indique el motivo de la cancelación.'), maxLength(2000)] : [maxLength(2000)] }) as Record<string, string>;
+  const editing = current.mode === 'EDITAR';
+  actErrors.value = validateAll(act, { scheduledAt: editing ? [required('Indique la fecha y hora.')] : [], location: editing ? [required('Indique el lugar.'), minLength(2), maxLength(200)] : [], reason: editing ? [required('Indique el motivo de la citación.'), minLength(3), maxLength(1000)] : [], note: current.mode === 'CANCELADA' ? [required('Indique el motivo de la cancelación.'), maxLength(2000)] : [maxLength(2000)] }) as Record<string, string>;
   if (Object.keys(actErrors.value).length) return;
   try {
-    await update.mutateAsync({ id: current.summons.id, expectedVersion: current.summons.version, ...(reschedule ? { scheduledAt: dateToIso(act.scheduledAt!, true), location: act.location.trim() } : { status: current.mode as SummonsStatus }), ...(act.note.trim() ? { outcomeNote: act.note.trim() } : {}) });
+    await update.mutateAsync({ id: current.summons.id, expectedVersion: current.summons.version, ...(editing ? { scheduledAt: dateToIso(act.scheduledAt!, true), location: act.location.trim(), reason: act.reason.trim() } : { status: current.mode as SummonsStatus }), ...(act.note.trim() ? { outcomeNote: act.note.trim() } : {}) });
     actOpen.value = false;
   } catch { /* el error se muestra en el diálogo */ }
 }
@@ -88,7 +88,7 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
                 <div v-if="can('summons.manage') && s.status === 'PROGRAMADA' && !closed" class="flex items-center gap-1">
                   <Button size="small" severity="success" text aria-label="Registrar reunión realizada" title="Registrar reunión realizada" @click="openAct(s, 'REALIZADA')"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
                   <Button size="small" severity="secondary" text aria-label="Registrar inasistencia" title="Registrar inasistencia" @click="openAct(s, 'NO_ASISTIO')"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
-                  <Button size="small" severity="secondary" text aria-label="Reprogramar citación" title="Reprogramar citación" @click="openAct(s, 'REPROGRAMAR')"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                  <Button size="small" severity="secondary" text aria-label="Editar citación" title="Editar citación" @click="openAct(s, 'EDITAR')"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
                   <Button size="small" severity="danger" text aria-label="Cancelar citación" title="Cancelar citación" @click="openAct(s, 'CANCELADA')"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
                 </div>
               </div>
@@ -124,13 +124,14 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
   </MutationDialog>
 
   <MutationDialog v-model:visible="actOpen" :header="acting ? (ACTION_TITLES[acting.mode] ?? '') : ''" submit-label="Guardar" :danger="acting?.mode === 'CANCELADA'" :pending="update.isPending.value" :error="update.error.value" @submit="submitAct" @reload="query.refetch()">
-    <template v-if="acting?.mode === 'REPROGRAMAR'">
-      <FormField id="sa-when" label="Nueva fecha y hora" required :error="actErrors.scheduledAt"><template #default="{ id, invalid }"><DatePicker v-model="act.scheduledAt" :input-id="id" date-format="dd-mm-yy" show-time hour-format="24" :step-minute="5" :invalid="invalid" show-icon icon-display="input" class="w-full" /></template></FormField>
+    <template v-if="acting?.mode === 'EDITAR'">
+      <FormField id="sa-when" label="Fecha y hora" required :error="actErrors.scheduledAt"><template #default="{ id, invalid }"><DatePicker v-model="act.scheduledAt" :input-id="id" date-format="dd-mm-yy" show-time hour-format="24" :step-minute="5" :invalid="invalid" show-icon icon-display="input" class="w-full" /></template></FormField>
       <FormField id="sa-where" label="Lugar" required :error="actErrors.location"><template #default="{ id, invalid }"><InputText :id="id" v-model="act.location" maxlength="200" :invalid="invalid" class="w-full" /></template></FormField>
+      <FormField id="sa-reason" label="Motivo" required :error="actErrors.reason"><template #default="{ id, invalid }"><Textarea :id="id" v-model="act.reason" rows="3" auto-resize maxlength="1000" :invalid="invalid" class="w-full" /></template></FormField>
     </template>
-    <FormField id="sa-note" :label="acting?.mode === 'CANCELADA' ? 'Motivo de la cancelación' : acting?.mode === 'REPROGRAMAR' ? 'Nota (opcional)' : 'Resultado o acuerdos (opcional)'" :required="acting?.mode === 'CANCELADA'" :error="actErrors.note">
+    <FormField v-if="acting?.mode !== 'EDITAR'" id="sa-note" :label="acting?.mode === 'CANCELADA' ? 'Motivo de la cancelación' : 'Resultado o acuerdos (opcional)'" :required="acting?.mode === 'CANCELADA'" :error="actErrors.note">
       <template #default="{ id, invalid }"><Textarea :id="id" v-model="act.note" rows="3" auto-resize maxlength="2000" :invalid="invalid" class="w-full" /></template>
     </FormField>
-    <p v-if="acting && acting.mode !== 'REPROGRAMAR'" class="text-xs text-slate-500">Al cerrar la citación ya no podrá modificarse.</p>
+    <p v-if="acting && acting.mode !== 'EDITAR'" class="text-xs text-slate-500">Al cerrar la citación ya no podrá modificarse.</p>
   </MutationDialog>
 </template>

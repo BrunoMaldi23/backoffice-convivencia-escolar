@@ -110,7 +110,7 @@ async function submit() {
       </template>
       <template v-else-if="dialog === 'members'">
         <p class="text-sm text-slate-700">Establecimiento: <strong>{{ target?.name }}</strong>. La API no lista las membresías; aquí solo se incorpora o se retira a una persona.</p>
-        <FormField id="es-user" label="Persona" required :error="errors.user"><template #default="{ id, invalid, describedby }"><UserSelect :id="id" v-model="form.user" :invalid="invalid" :describedby="describedby" /></template></FormField>
+        <FormField id="es-user" label="Persona" required :error="errors.user"><template #default="{ id, invalid, describedby }"><UserSelect :id="id" v-model="form.user" :invalid="invalid" :describedby="describedby" all-active-users /></template></FormField>
         <div class="flex items-center justify-between gap-4 rounded-lg border border-slate-200 px-4 py-3"><label for="es-member" class="text-sm font-medium text-slate-800">Membresía activa</label><ToggleSwitch v-model="form.memberActive" input-id="es-member" /></div>
       </template>
       <template v-else-if="dialog === 'stage'">

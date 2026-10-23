@@ -63,7 +63,7 @@ async function download(row: Row) {
             <template #cell-uploadedByUserId="{ row }">{{ nameOf(row.uploadedByUserId, 'Persona no disponible') }}</template>
             <template #cell-createdAt="{ row }"><span class="whitespace-nowrap tabular-nums">{{ formatDateTime(row.createdAt) }}</span></template>
             <template #actions="{ row }">
-              <Button size="small" severity="secondary" text :loading="downloading === row.id" :aria-label="`Descargar ${row.originalFilename}`" @click="download(row)"><template #icon><AppIcon name="download" :size="16" /></template></Button>
+              <Button size="small" class="!bg-slate-100 !text-slate-700 hover:!bg-slate-200 hover:!text-slate-900" :loading="downloading === row.id" :aria-label="`Descargar ${row.originalFilename}`" :title="`Descargar ${row.originalFilename}`" @click="download(row)"><template #icon><AppIcon name="download" :size="17" /></template></Button>
             </template>
             <template #empty><div class="px-6 py-10 text-center text-sm text-slate-600">Sin coincidencias. Ajuste la búsqueda o los filtros.</div></template>
           </AppTable>

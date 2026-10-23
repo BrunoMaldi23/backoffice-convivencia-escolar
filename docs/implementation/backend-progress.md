@@ -1,6 +1,8 @@
-# Progreso de implementación backend
+# Progreso de implementación backend (registro histórico)
 
-Actualizado: 2026-10-23.
+> Este documento conserva un corte técnico anterior. No representa el estado operativo vigente: los módulos de entrevistas, documentos, comunidad y operaciones posteriores evolucionaron desde este punto. Para preparación institucional use [docs/operacion](../operacion/README.md); para contratos vigentes use [docs/api](../api/README.md).
+
+Corte histórico: 2026-10-23.
 
 ## Último bloque completado
 

@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
 import Select from 'primevue/select';
 import Textarea from 'primevue/textarea';
 import AppIcon from '@/components/AppIcon.vue';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import FormField from '@/components/FormField.vue';
 import MutationDialog from '@/components/MutationDialog.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
-import { useCreateReport, useReports, useUpdateReport } from '@/composables/useCaseContent';
+import { useCreateReport, useDeleteReport, useReports, useUpdateReport, useVoidReport } from '@/composables/useCaseContent';
 import { useSession } from '@/composables/useSession';
 import { CHANNEL_OPTIONS, channelLabel, CLASSIFICATION_OPTIONS, classificationLabel } from '@/lib/catalogs';
 import { dateToIso, formatDate, isoToDate } from '@/lib/format';
@@ -22,12 +23,20 @@ const { can } = useSession();
 const query = useReports(() => props.caseId);
 const create = useCreateReport(props.caseId);
 const update = useUpdateReport(props.caseId);
+const voidRecord = useVoidReport(props.caseId);
+const deleteRecord = useDeleteReport(props.caseId);
+const deleteTarget = ref<CaseReport | null>(null);
+const deleteOpen = computed({ get: () => Boolean(deleteTarget.value), set: (value: boolean) => { if (!value) deleteTarget.value = null; } });
 
 const open = ref(false);
 const editing = ref<CaseReport | null>(null);
 const today = new Date();
 const form = reactive({ receivedAt: today as Date | null, channel: 'DIRECTO' as string | null, classification: 'SIN_CLASIFICAR' as string | null, factual: '', background: '' });
 const errors = ref<Record<string, string>>({});
+const voidOpen = ref(false);
+const voidTarget = ref<CaseReport | null>(null);
+const voidReason = ref('');
+const voidError = ref<string | null>(null);
 const mutation = () => (editing.value ? update : create);
 
 function openForm(report: CaseReport | null) {
@@ -49,6 +58,12 @@ async function submit() {
     open.value = false;
   } catch { /* el error se muestra en el diálogo */ }
 }
+function askVoid(report: CaseReport) { voidTarget.value = report; voidReason.value = ''; voidError.value = null; voidRecord.reset(); voidOpen.value = true; }
+async function submitVoid() {
+  voidError.value = voidReason.value.trim().length < 5 ? 'Indique el motivo de la anulación (al menos 5 caracteres).' : maxLength(1000)(voidReason.value);
+  if (voidError.value || !voidTarget.value) return;
+  try { await voidRecord.mutateAsync({ id: voidTarget.value.id, expectedVersion: voidTarget.value.version, reason: voidReason.value.trim() }); voidOpen.value = false; } catch { /* el error se muestra en el diálogo */ }
+}
 </script>
 
 <template>
@@ -62,7 +77,11 @@ async function submit() {
           <li v-for="report in data" :key="report.id" class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <p class="text-sm font-semibold text-slate-900">Recibida el {{ formatDate(report.receivedAt) }}</p>
-              <Button v-if="can('reports.update')" label="Editar" size="small" severity="secondary" text @click="openForm(report)" />
+              <div class="flex items-center gap-1">
+                <Button v-if="can('reports.update')" size="small" severity="secondary" text :aria-label="`Editar denuncia del ${formatDate(report.receivedAt)}`" title="Editar denuncia" @click="openForm(report)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                <Button v-if="can('reports.update')" size="small" severity="secondary" text :aria-label="`Anular denuncia del ${formatDate(report.receivedAt)}`" title="Anular denuncia (se conserva en la trazabilidad)" @click="askVoid(report)"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
+                <Button v-if="can('reports.update')" size="small" severity="danger" text :aria-label="`Eliminar definitivamente la denuncia del ${formatDate(report.receivedAt)}`" title="Eliminar definitivamente" @click="deleteTarget = report"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+              </div>
             </div>
             <p class="mt-1 text-xs text-slate-500">{{ channelLabel(report.channelCode) }} · {{ classificationLabel(report.classificationCode) }}</p>
             <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-800">{{ report.factualDescription }}</p>
@@ -92,4 +111,17 @@ async function submit() {
       <template #default="{ id, invalid }"><Textarea :id="id" v-model="form.background" rows="3" auto-resize maxlength="4000" :invalid="invalid" class="w-full" /></template>
     </FormField>
   </MutationDialog>
+
+  <MutationDialog v-model:visible="voidOpen" header="Anular denuncia" submit-label="Anular registro" :pending="voidRecord.isPending.value" :error="voidRecord.error.value" @submit="submitVoid" @reload="query.refetch()">
+    <p class="text-sm leading-relaxed text-slate-700">La denuncia dejará de mostrarse en la operación, pero conservará su trazabilidad y auditoría.</p>
+    <FormField id="rp-void-reason" label="Motivo de la anulación" required :error="voidError">
+      <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="voidReason" rows="3" auto-resize maxlength="1000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
+    </FormField>
+  </MutationDialog>
+
+  <ConfirmActionDialog
+    v-model:visible="deleteOpen" header="Eliminar denuncia" confirm-label="Eliminar definitivamente" danger
+    :message="`Se eliminará definitivamente la denuncia recibida el ${deleteTarget ? formatDate(deleteTarget.receivedAt) : ''}. Dejará de aparecer en el expediente y en su línea de tiempo; solo quedará la auditoría de seguridad. Si necesita conservar el antecedente, use «Anular».`"
+    :action="() => deleteRecord.mutateAsync({ id: deleteTarget!.id, expectedVersion: deleteTarget!.version })"
+  />
 </template>

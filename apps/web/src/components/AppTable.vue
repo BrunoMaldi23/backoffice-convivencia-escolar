@@ -47,9 +47,9 @@ const onPage = (event: DataTablePageEvent) => emit('page', event.page + 1);
         <div class="flex justify-end gap-1">
           <slot name="actions" :row="data as Row" />
           <RouterLink
-            v-if="rowTo" :to="rowTo(data as Row)" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            :aria-label="detailLabel ? detailLabel(data as Row) : 'Ver detalle'"
-          ><AppIcon name="chevron-right" :size="17" /></RouterLink>
+            v-if="rowTo" :to="rowTo(data as Row)" class="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900"
+            :aria-label="detailLabel ? detailLabel(data as Row) : 'Ver detalle'" :title="detailLabel ? detailLabel(data as Row) : 'Ver detalle'"
+          ><AppIcon name="eye" :size="17" /></RouterLink>
         </div>
       </template>
     </Column>

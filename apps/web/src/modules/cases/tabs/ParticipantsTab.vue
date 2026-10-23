@@ -10,7 +10,7 @@ import FormField from '@/components/FormField.vue';
 import MutationDialog from '@/components/MutationDialog.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
-import { useCaseParticipants, useCreateParticipant, useUnlinkParticipant } from '@/composables/useCaseContent';
+import { useCaseParticipants, useCreateParticipant, useUnlinkParticipant, useUpdateParticipantLink } from '@/composables/useCaseContent';
 import { useSession } from '@/composables/useSession';
 import { PARTICIPANT_KIND_OPTIONS, PARTICIPATION_OPTIONS, participantKindLabel, participationLabel } from '@/lib/catalogs';
 import { formatDate } from '@/lib/format';
@@ -27,10 +27,14 @@ const { can } = useSession();
 const query = useCaseParticipants(() => props.caseRecord.id);
 const create = useCreateParticipant(props.caseRecord.id);
 const unlink = useUnlinkParticipant(props.caseRecord.id);
+const updateLink = useUpdateParticipantLink(props.caseRecord.id);
 
 const open = ref(false);
 const toUnlink = ref<CaseParticipantLink | null>(null);
 const unlinkOpen = computed({ get: () => Boolean(toUnlink.value), set: (v: boolean) => { if (!v) toUnlink.value = null; } });
+const editingLink = ref<CaseParticipantLink | null>(null);
+const editOpen = computed({ get: () => Boolean(editingLink.value), set: (v: boolean) => { if (!v) editingLink.value = null; } });
+const editCode = ref<string | null>(null);
 const DIRECTORY_PERMISSION: Partial<Record<ParticipantKind, string>> = { ESTUDIANTE: 'students.read', APODERADO: 'guardians.read', FUNCIONARIO: 'staff.read' };
 const PERSON_FIELD = { ESTUDIANTE: 'studentId', APODERADO: 'guardianId', FUNCIONARIO: 'staffMemberId' } as const;
 const form = reactive({ kind: 'ESTUDIANTE' as ParticipantKind | null, label: '', code: 'AFECTADO' as string | null, person: null as PickedPerson | null, manual: false });
@@ -40,6 +44,7 @@ const pickFromDirectory = computed(() => canPickFromDirectory.value && !form.man
 const errors = ref<Record<string, string>>({});
 
 function openForm() { Object.assign(form, { kind: 'ESTUDIANTE', label: '', code: 'AFECTADO', person: null, manual: false }); errors.value = {}; create.reset(); open.value = true; }
+function openEdit(link: CaseParticipantLink) { editingLink.value = link; editCode.value = link.participationCode; updateLink.reset(); }
 watch(() => form.kind, () => { form.person = null; });
 async function submit() {
   errors.value = validateAll(form, {
@@ -68,7 +73,10 @@ async function submit() {
               <p class="break-words text-sm font-medium text-slate-900">{{ link.participant.referenceLabel }}</p>
               <p class="mt-0.5 text-xs text-slate-500">{{ participantKindLabel(link.participant.kind) }} · {{ participationLabel(link.participationCode) }} · asociado el {{ formatDate(link.linkedAt) }}</p>
             </div>
-            <Button v-if="can('participants.manage')" label="Desvincular" size="small" severity="danger" text @click="toUnlink = link" />
+            <div v-if="can('participants.manage')" class="flex items-center gap-1">
+              <Button size="small" severity="secondary" text aria-label="Editar participación" title="Editar participación" @click="openEdit(link)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+              <Button size="small" severity="danger" text aria-label="Desvincular involucrado" title="Desvincular involucrado" @click="toUnlink = link"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+            </div>
           </li>
         </ul>
       </template>
@@ -94,6 +102,13 @@ async function submit() {
     </template>
     <FormField id="pt-code" label="Participación en el caso" required :error="errors.code">
       <template #default="{ id, invalid }"><Select v-model="form.code" :input-id="id" :options="PARTICIPATION_OPTIONS" option-label="label" option-value="value" :invalid="invalid" class="w-full" /></template>
+    </FormField>
+  </MutationDialog>
+
+  <MutationDialog v-model:visible="editOpen" header="Editar participación" submit-label="Guardar cambios" :pending="updateLink.isPending.value" :error="updateLink.error.value" :disabled="!editCode" @submit="updateLink.mutateAsync({ id: editingLink!.id, expectedVersion: editingLink!.version, participationCode: editCode! }).then(() => (editOpen = false)).catch(() => undefined)" @reload="query.refetch()">
+    <p class="text-sm text-slate-700">{{ editingLink?.participant.referenceLabel }}</p>
+    <FormField id="pt-edit-code" label="Participación en el caso" required>
+      <template #default="{ id }"><Select v-model="editCode" :input-id="id" :options="PARTICIPATION_OPTIONS" option-label="label" option-value="value" class="w-full" /></template>
     </FormField>
   </MutationDialog>
 

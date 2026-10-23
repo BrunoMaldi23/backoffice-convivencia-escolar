@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Convivencia Escolar">
+  <rect width="64" height="64" rx="14" fill="#0369a1"/>
+  <path fill="#fff" d="M32 13 16 20v12c0 10 6.9 17.5 16 20 9.1-2.5 16-10 16-20V20l-16-7Zm0 8 8 3.5V32c0 5.6-3.3 10.5-8 12.7-4.7-2.2-8-7.1-8-12.7v-7.5l8-3.5Z"/>
+  <circle cx="32" cy="31" r="4" fill="#38bdf8"/>
+</svg>

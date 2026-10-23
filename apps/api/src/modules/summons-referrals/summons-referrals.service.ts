@@ -94,15 +94,16 @@ export class SummonsReferralsService {
       return referral;
     });
   }
-  async updateReferral(actor: string, caseId: string, id: string, data: { expectedVersion: number; status?: ReferralStatus; contactName?: string | null; responseNote?: string | null }, ctx: AuditRequestContext) {
+  async updateReferral(actor: string, caseId: string, id: string, data: { expectedVersion: number; typeCode?: string; institutionName?: string; reason?: string; status?: ReferralStatus; contactName?: string | null; responseNote?: string | null }, ctx: AuditRequestContext) {
     return this.db.$transaction(async (tx) => {
       await this.requireOpenCase(actor, caseId, tx);
       const current = await tx.caseReferral.findFirst({ where: { id, caseId } });
       if (!current) throw new NotFoundException('Derivación no disponible');
       if (current.status === ReferralStatus.CERRADA) throw new ConflictException('La derivación ya fue cerrada y no admite cambios');
+      if ((data.typeCode !== undefined || data.institutionName !== undefined || data.reason !== undefined) && current.status !== ReferralStatus.PENDIENTE) throw new ConflictException('Los datos base solo se pueden editar mientras la derivación está pendiente');
       if (data.status && data.status !== current.status && !REFERRAL_TRANSITIONS[current.status].includes(data.status)) throw new ConflictException('Cambio de estado no permitido');
       const now = new Date();
-      const result = await tx.caseReferral.updateMany({ where: { id, caseId, version: data.expectedVersion }, data: { ...(data.status && data.status !== current.status ? { status: data.status } : {}), ...(data.status === ReferralStatus.ENVIADA ? { sentAt: now } : {}), ...(data.status === ReferralStatus.CON_RESPUESTA ? { responseAt: now } : {}), ...(data.status === ReferralStatus.CERRADA ? { closedAt: now } : {}), ...(data.contactName === undefined ? {} : { contactName: data.contactName?.trim() || null }), ...(data.responseNote === undefined ? {} : { responseNote: data.responseNote?.trim() || null }), version: { increment: 1 } } });
+      const result = await tx.caseReferral.updateMany({ where: { id, caseId, version: data.expectedVersion }, data: { ...(data.typeCode === undefined ? {} : { typeCode: data.typeCode.trim().toUpperCase() }), ...(data.institutionName === undefined ? {} : { institutionName: data.institutionName.trim() }), ...(data.reason === undefined ? {} : { reason: data.reason.trim() }), ...(data.status && data.status !== current.status ? { status: data.status } : {}), ...(data.status === ReferralStatus.ENVIADA ? { sentAt: now } : {}), ...(data.status === ReferralStatus.CON_RESPUESTA ? { responseAt: now } : {}), ...(data.status === ReferralStatus.CERRADA ? { closedAt: now } : {}), ...(data.contactName === undefined ? {} : { contactName: data.contactName?.trim() || null }), ...(data.responseNote === undefined ? {} : { responseNote: data.responseNote?.trim() || null }), version: { increment: 1 } } });
       if (result.count !== 1) throw new ConflictException('La derivación fue modificada por otra persona');
       await this.event(tx, caseId, actor, CaseEventType.REFERRAL_UPDATED, 'CASE_REFERRAL', id);
       await this.record(tx, actor, 'REFERRAL_UPDATED', 'CASE_REFERRAL', id, { caseId, status: data.status ?? current.status }, ctx);

@@ -16,6 +16,17 @@ const transitions: Record<CaseStatus, CaseStatus[]> = {
   RESUELTO: ['CERRADO', 'EN_PROCESO'], CERRADO: ['EN_EVALUACION']
 };
 
+const relevantTimelineEvents: CaseEventType[] = [
+  CaseEventType.CASE_CREATED, CaseEventType.CASE_ASSIGNED, CaseEventType.CASE_STAGE_CHANGED,
+  CaseEventType.CASE_TRANSITIONED, CaseEventType.CASE_PAUSED, CaseEventType.CASE_RESUMED,
+  CaseEventType.CASE_RESOLVED, CaseEventType.CASE_CLOSED, CaseEventType.CASE_REOPENED,
+  CaseEventType.REPORT_CREATED, CaseEventType.REPORT_VOIDED, CaseEventType.INTERVIEW_FINALIZED, CaseEventType.INTERVIEW_CORRECTED,
+  CaseEventType.INTERVIEW_VOIDED, CaseEventType.DOCUMENT_UPLOADED, CaseEventType.DOCUMENT_VOIDED, CaseEventType.PROTOCOL_APPLIED, CaseEventType.PROTOCOL_REVOKED, CaseEventType.MEASURE_CREATED,
+  CaseEventType.MEASURE_UPDATED, CaseEventType.FOLLOW_UP_CREATED, CaseEventType.FOLLOW_UP_VOIDED, CaseEventType.TASK_CREATED,
+  CaseEventType.PARTICIPANT_UPDATED, CaseEventType.TASK_UPDATED, CaseEventType.TASK_COMPLETED, CaseEventType.TASK_CANCELLED, CaseEventType.SUMMONS_CREATED, CaseEventType.SUMMONS_UPDATED,
+  CaseEventType.REFERRAL_CREATED, CaseEventType.REFERRAL_UPDATED
+];
+
 @Injectable()
 export class CasesService {
   constructor(private readonly db: DatabaseService, private readonly institutions: InstitutionsService, private readonly audit: SecurityAuditService) {}
@@ -94,10 +105,10 @@ export class CasesService {
     });
   }
 
-  async timeline(actorId: string, caseId: string, page: number, limit: number) {
+  async timeline(actorId: string, caseId: string, page: number, limit: number, mode: 'relevant' | 'all' = 'relevant') {
     await this.institutions.requireCaseAccess(actorId, caseId);
-    const where = { caseId };
-    const [items, total] = await this.db.$transaction([this.db.caseEvent.findMany({ where, orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], skip: (page - 1) * limit, take: limit }), this.db.caseEvent.count({ where })]);
+    const where: Prisma.CaseEventWhereInput = { caseId, ...(mode === 'relevant' ? { eventType: { in: relevantTimelineEvents } } : {}) };
+    const [items, total] = await this.db.$transaction([this.db.caseEvent.findMany({ where, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }), this.db.caseEvent.count({ where })]);
     return { items, total, page, limit };
   }
 

@@ -88,7 +88,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="max-w-4xl">
+  <div class="max-w-5xl">
     <PageHeader :title="withReport ? 'Registrar denuncia' : 'Nuevo caso'" :description="withReport ? 'Registre la denuncia recibida; se creará el expediente que la contiene.' : 'Registre un caso de convivencia escolar. Los campos con asterisco son obligatorios.'" :back="{ to: withReport ? { name: 'complaints' } : { name: 'cases' }, label: withReport ? 'Volver a denuncias' : 'Volver a casos' }" />
 
     <NoEstablishment v-if="!establishment.isPending.value && !establishment.currentId.value" class="mb-5" />
@@ -99,14 +99,14 @@ async function submit() {
     </Message>
 
     <form novalidate class="space-y-6" @submit.prevent="submit">
-      <SectionCard title="Identificación del caso" description="El folio se asigna automáticamente al guardar.">
-        <fieldset :disabled="Boolean(created)" class="grid gap-5 md:grid-cols-2">
-          <FormField v-if="establishment.options.value.length > 1" id="nc-establishmentId" label="Establecimiento" required :error="errors.establishmentId" class="md:col-span-2">
+      <SectionCard title="Datos del caso" description="El folio se asigna automáticamente al guardar.">
+        <fieldset :disabled="Boolean(created)" class="grid gap-5 lg:grid-cols-3">
+          <FormField v-if="establishment.options.value.length > 1" id="nc-establishmentId" label="Establecimiento" required :error="errors.establishmentId" class="lg:col-span-3">
             <template #default="{ id, invalid, describedby }">
               <Select v-model="form.establishmentId" :input-id="id" :options="establishment.options.value" option-label="label" option-value="value" :invalid="invalid" :aria-describedby="describedby" :placeholder="establishment.nameOf(selectedEstablishment ?? '')" class="w-full" />
             </template>
           </FormField>
-          <FormField id="nc-title" label="Título" required help="Describa la situación sin incluir datos personales innecesarios." :error="errors.title" class="md:col-span-2">
+          <FormField id="nc-title" label="Título" required help="Describa la situación sin incluir datos personales innecesarios." :error="errors.title" class="lg:col-span-3">
             <template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.title" maxlength="180" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
           </FormField>
           <FormField id="nc-category" label="Categoría" required :error="errors.category">
@@ -118,11 +118,16 @@ async function submit() {
           <FormField id="nc-receivedAt" label="Fecha de recepción" required :error="errors.receivedAt">
             <template #default="{ id, invalid, describedby }"><DatePicker v-model="form.receivedAt" :input-id="id" date-format="dd-mm-yy" :max-date="today" :invalid="invalid" :aria-describedby="describedby" show-icon icon-display="input" class="w-full" /></template>
           </FormField>
-          <FormField id="nc-responsibleUserId" label="Responsable" help="Opcional. Puede asignarlo después desde el expediente.">
-            <template #default="{ id, describedby }"><UserSelect :id="id" v-model="form.responsibleUserId" :describedby="describedby" show-clear /></template>
-          </FormField>
-          <FormField id="nc-description" label="Descripción inicial" :error="errors.description" class="md:col-span-2">
+          <FormField id="nc-description" label="Descripción inicial" :error="errors.description" class="lg:col-span-3">
             <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="form.description" rows="4" auto-resize maxlength="4000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
+          </FormField>
+        </fieldset>
+      </SectionCard>
+
+      <SectionCard title="Gestión inicial" description="Opcional. Puede asignar el caso o definir la próxima acción más adelante.">
+        <fieldset :disabled="Boolean(created)" class="grid gap-5 lg:grid-cols-3">
+          <FormField id="nc-responsibleUserId" label="Responsable">
+            <template #default="{ id, describedby }"><UserSelect :id="id" v-model="form.responsibleUserId" :describedby="describedby" show-clear /></template>
           </FormField>
           <FormField id="nc-nextAction" label="Próxima acción" :error="errors.nextAction">
             <template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.nextAction" maxlength="500" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>

@@ -24,19 +24,19 @@ function clear() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
-    <IconField v-if="searchable" class="w-full lg:max-w-xs">
+  <div class="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center">
+    <IconField v-if="searchable" class="w-full xl:w-80 xl:shrink-0">
       <InputIcon><AppIcon name="search" :size="16" class="text-slate-500" /></InputIcon>
       <InputText v-model="search" :placeholder="placeholder" :aria-label="placeholder" class="w-full" type="search" />
     </IconField>
-    <div v-if="filters.length" class="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap">
+    <div v-if="filters.length" class="grid grid-cols-2 gap-2 xl:flex xl:min-w-0 xl:flex-1 xl:flex-nowrap">
       <Select
         v-for="filter in filters" :key="filter.field" :model-value="values[filter.field] ?? null" :options="filter.options"
-        option-label="label" option-value="value" :placeholder="filter.label" :aria-label="`Filtrar por ${filter.label.toLowerCase()}`" show-clear class="w-full min-w-0 last:odd:col-span-2 lg:w-48"
+        option-label="label" option-value="value" :placeholder="filter.label" :aria-label="`Filtrar por ${filter.label.toLowerCase()}`" show-clear class="w-full min-w-0 last:odd:col-span-2 xl:min-w-36 xl:flex-1"
         @update:model-value="(v: string | null) => setFilter(filter.field, v)"
       />
     </div>
-    <div class="flex items-center gap-3 lg:ml-auto">
+    <div class="flex shrink-0 items-center gap-3 xl:ml-auto">
       <Button v-if="active" label="Limpiar filtros" text size="small" @click="clear" />
       <p v-if="total !== null" class="whitespace-nowrap text-sm tabular-nums text-slate-500" aria-live="polite">{{ total }} {{ total === 1 ? 'resultado' : 'resultados' }}</p>
     </div>

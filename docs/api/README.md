@@ -12,4 +12,4 @@ La API REST usa el prefijo global `/api`, JSON y nombres de recursos en minúscu
 
 La respuesta de salud no expone configuración, usuarios ni secretos. Los errores de validación usan el `ValidationPipe` global de NestJS.
 
-El [contrato propuesto de Casos](cases-proposed-contract.md) es documental para Fase 2A; sus rutas todavía no están implementadas.
+El contrato vigente de expedientes, sus operaciones y la línea de tiempo está en [backend-contracts.md](backend-contracts.md). El archivo [cases-proposed-contract.md](cases-proposed-contract.md) es un antecedente de diseño histórico y no describe el estado operativo actual.

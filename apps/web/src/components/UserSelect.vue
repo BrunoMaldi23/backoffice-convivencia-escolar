@@ -8,15 +8,16 @@ import { useDirectory } from '@/composables/useDirectory';
  * Selector de persona. Con permiso `users.read` ofrece la lista de usuarios activos; sin él la API no permite listar usuarios,
  * por lo que se pide el identificador (UUID) de la persona, validado antes de enviarse.
  */
-const props = withDefaults(defineProps<{ id: string; invalid?: boolean; describedby?: string; placeholder?: string; showClear?: boolean }>(), { invalid: false, describedby: undefined, placeholder: 'Seleccione una persona', showClear: false });
+const props = withDefaults(defineProps<{ id: string; invalid?: boolean; describedby?: string; placeholder?: string; showClear?: boolean; allActiveUsers?: boolean }>(), { invalid: false, describedby: undefined, placeholder: 'Seleccione una persona', showClear: false, allActiveUsers: false });
 const model = defineModel<string | null>({ default: null });
-const { available, options, query } = useDirectory();
+const { available, options, activeUserOptions, query } = useDirectory();
+const selectableOptions = computed(() => props.allActiveUsers && activeUserOptions.value.length ? activeUserOptions.value : options.value);
 const text = computed({ get: () => model.value ?? '', set: (value: string) => { model.value = value.trim() || null; } });
 </script>
 
 <template>
   <Select
-    v-if="available" v-model="model" :input-id="id" :options="options" option-label="label" option-value="value" :invalid="invalid" :aria-describedby="describedby"
+    v-if="available" v-model="model" :input-id="id" :options="selectableOptions" option-label="label" option-value="value" :invalid="invalid" :aria-describedby="describedby"
     :placeholder="placeholder" :show-clear="props.showClear" filter class="w-full"
   />
   <div v-else>

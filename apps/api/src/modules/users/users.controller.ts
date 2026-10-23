@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiConflictResponse, ApiCookieAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags, ApiTooManyRequestsResponse, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { SessionGuard, CsrfGuard, PermissionsGuard, AdminRequest } from '../../common/security/admin-guards';
 import { RequirePermissions } from '../../common/security/require-permissions';
 import { UsersService } from './users.service';
@@ -19,6 +19,7 @@ class CreateUserDto {
   @ApiProperty() @IsEmail() @MaxLength(254) email!: string;
   @ApiProperty() @IsString() @MinLength(2) @MaxLength(120) displayName!: string;
   @ApiProperty({ type: [String] }) @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) roles!: string[];
+  @ApiProperty({ description: 'Establecimiento al que quedará asignada la persona antes de recibir la invitación.' }) @IsUUID() establishmentId!: string;
 }
 class UpdateUserDto {
   @ApiPropertyOptional() @IsOptional() @IsEmail() @MaxLength(254) email?: string;
@@ -32,8 +33,8 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
   @Get() @RequirePermissions('users.read') @ApiOperation({ summary: 'Lista usuarios', description: 'Requiere users.read. Incluye paginación page y limit.' }) @ApiBadRequestResponse({ description: 'Filtros inválidos' })
   list(@Query() query: ListUsersDto) { return this.users.list(query.page, query.limit, query.search, query.role, query.active === undefined ? undefined : query.active === 'true'); }
-  @Post() @RequirePermissions('users.create') @ApiOperation({ summary: 'Crea usuario e invita por correo', description: 'Requiere users.create; la cuenta queda inactiva hasta aceptar la invitación.' }) @ApiConflictResponse({ description: 'Correo o roles en conflicto' })
-  create(@Req() req: AdminRequest, @Body() dto: CreateUserDto) { return this.users.create(dto.email, dto.displayName, dto.roles, req.actorId!, auditContext(req)); }
+  @Post() @RequirePermissions('users.create', 'institutions.manage') @ApiOperation({ summary: 'Crea, asigna a un establecimiento e invita por correo', description: 'Requiere users.create e institutions.manage. La cuenta queda inactiva y con membresía activa hasta aceptar la invitación.' }) @ApiConflictResponse({ description: 'Correo o roles en conflicto' })
+  create(@Req() req: AdminRequest, @Body() dto: CreateUserDto) { return this.users.create(dto.email, dto.displayName, dto.roles, dto.establishmentId, req.actorId!, auditContext(req)); }
   @Get(':id') @RequirePermissions('users.read') @ApiNotFoundResponse({ description: 'Usuario no encontrado' })
   get(@Param('id', ParseUUIDPipe) id: string) { return this.users.get(id); }
   @Patch(':id') @RequirePermissions('users.update')

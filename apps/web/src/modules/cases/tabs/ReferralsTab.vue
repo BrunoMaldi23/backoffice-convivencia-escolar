@@ -31,12 +31,19 @@ const closed = computed(() => props.caseRecord.status === 'CERRADO');
 const open = ref(false);
 const form = reactive({ typeCode: 'SALUD' as string | null, institutionName: '', reason: '', contactName: '' });
 const errors = ref<Record<string, string>>({});
-function openForm() { Object.assign(form, { typeCode: 'SALUD', institutionName: '', reason: '', contactName: '' }); errors.value = {}; create.reset(); open.value = true; }
+const editing = ref<CaseReferral | null>(null);
+const formMutation = computed(() => editing.value ? update : create);
+function openForm(referral: CaseReferral | null = null) {
+  editing.value = referral;
+  Object.assign(form, referral ? { typeCode: referral.typeCode, institutionName: referral.institutionName, reason: referral.reason, contactName: referral.contactName ?? '' } : { typeCode: 'SALUD', institutionName: '', reason: '', contactName: '' });
+  errors.value = {}; create.reset(); update.reset(); open.value = true;
+}
 async function submit() {
   errors.value = validateAll(form, { typeCode: [required('Seleccione el tipo de institución.')], institutionName: [required('Indique la institución o el centro.'), minLength(2), maxLength(200)], reason: [required('Indique el motivo de la derivación.'), minLength(3), maxLength(2000)], contactName: [maxLength(160)] }) as Record<string, string>;
   if (Object.keys(errors.value).length) return;
   try {
-    await create.mutateAsync({ typeCode: form.typeCode!, institutionName: form.institutionName.trim(), reason: form.reason.trim(), ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}) });
+    if (editing.value) await update.mutateAsync({ id: editing.value.id, expectedVersion: editing.value.version, typeCode: form.typeCode!, institutionName: form.institutionName.trim(), reason: form.reason.trim(), contactName: form.contactName.trim() || null });
+    else await create.mutateAsync({ typeCode: form.typeCode!, institutionName: form.institutionName.trim(), reason: form.reason.trim(), ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}) });
     open.value = false;
   } catch { /* el error se muestra en el diálogo */ }
 }
@@ -67,7 +74,7 @@ async function submitAct() {
 <template>
   <SectionCard dense title="Derivaciones" description="Casos derivados a instituciones de la red y su respuesta.">
     <template v-if="can('referrals.manage')" #actions>
-      <Button label="Nueva derivación" size="small" :disabled="closed" :title="closed ? 'Reabra el expediente para registrar derivaciones' : undefined" @click="openForm"><template #icon><AppIcon name="plus" :size="15" /></template></Button>
+      <Button label="Nueva derivación" size="small" :disabled="closed" :title="closed ? 'Reabra el expediente para registrar derivaciones' : undefined" @click="openForm()"><template #icon><AppIcon name="plus" :size="15" /></template></Button>
     </template>
     <p v-if="closed" class="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">El expediente está cerrado: reábralo para registrar derivaciones nuevas.</p>
     <QueryState :data="query.data.value" :is-pending="query.isPending.value" :error="query.error.value" compact empty-title="Sin derivaciones" empty-description="Registre cuando el caso se derive a salud, OPD, tribunales u otra institución." empty-icon="referral" subject="las derivaciones" @retry="query.refetch()">
@@ -79,6 +86,7 @@ async function submitAct() {
               <div class="flex items-center gap-2">
                 <StatusBadge :status="r.status" />
                 <div v-if="can('referrals.manage') && NEXT[r.status].length && !closed" class="flex items-center gap-1">
+                  <Button v-if="r.status === 'PENDIENTE'" size="small" severity="secondary" text aria-label="Editar derivación" title="Editar derivación" @click="openForm(r)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
                   <Button v-for="next in NEXT[r.status]" :key="next.status" size="small" :severity="next.status === 'CERRADA' ? 'secondary' : 'success'" text :aria-label="next.label" :title="next.label" @click="openAct(r, next)"><template #icon><AppIcon :name="NEXT_ICON[next.status]" :size="16" /></template></Button>
                 </div>
               </div>
@@ -98,7 +106,7 @@ async function submitAct() {
     </QueryState>
   </SectionCard>
 
-  <MutationDialog v-model:visible="open" header="Nueva derivación" submit-label="Registrar derivación" :pending="create.isPending.value" :error="create.error.value" @submit="submit" @reload="query.refetch()">
+  <MutationDialog v-model:visible="open" :header="editing ? 'Editar derivación' : 'Nueva derivación'" :submit-label="editing ? 'Guardar cambios' : 'Registrar derivación'" :pending="formMutation.isPending.value" :error="formMutation.error.value" @submit="submit" @reload="query.refetch()">
     <FormField id="rf-type" label="Tipo de institución" required :error="errors.typeCode"><template #default="{ id, invalid }"><Select v-model="form.typeCode" :input-id="id" :options="REFERRAL_TYPE_OPTIONS" option-label="label" option-value="value" :invalid="invalid" class="w-full" /></template></FormField>
     <FormField id="rf-inst" label="Institución o centro" required :error="errors.institutionName"><template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.institutionName" maxlength="200" :invalid="invalid" :aria-describedby="describedby" autocomplete="off" class="w-full" /></template></FormField>
     <FormField id="rf-contact" label="Persona de contacto" help="Opcional." :error="errors.contactName"><template #default="{ id, invalid }"><InputText :id="id" v-model="form.contactName" maxlength="160" :invalid="invalid" autocomplete="off" class="w-full" /></template></FormField>

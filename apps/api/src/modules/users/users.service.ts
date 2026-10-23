@@ -21,7 +21,7 @@ export class UsersService {
     return { items: items.map(present), total, page, limit };
   }
   async get(id: string) { const user = await this.db.user.findUnique({ where: { id }, select: userSelect }); if (!user) throw new NotFoundException('Usuario no encontrado'); return present(user); }
-  async create(email: string, displayName: string, roleNames: string[], actorId: string, context: AuditRequestContext = {}) {
+  async create(email: string, displayName: string, roleNames: string[], establishmentId: string, actorId: string, context: AuditRequestContext = {}) {
     const normalized = email.trim().toLowerCase();
     if (roleNames.includes('SYSTEM_ADMIN')) throw new ForbiddenException('No se concede SYSTEM_ADMIN al crear cuentas');
     const roles = await this.resolveRoles(roleNames);
@@ -30,9 +30,13 @@ export class UsersService {
     let user: { id: string };
     try {
       user = await this.db.$transaction(async (tx) => {
+        const establishment = await tx.establishment.findFirst({ where: { id: establishmentId, isActive: true }, select: { id: true } });
+        if (!establishment) throw new NotFoundException('Establecimiento no disponible');
         const created = await tx.user.create({ data: { email: normalized, displayName: displayName.trim(), isActive: false, passwordHash: unusableHash, roles: { create: roles.map((r) => ({ roleId: r.id })) } } });
+        await tx.establishmentMembership.create({ data: { establishmentId: establishment.id, userId: created.id, isActive: true } });
         await tx.passwordResetToken.create({ data: { userId: created.id, tokenHash: digest(token), purpose: 'INVITE', expiresAt: new Date(Date.now() + this.config.getOrThrow<number>('PASSWORD_RESET_TTL_MINUTES') * 60_000) } });
-        await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_CREATED', targetType: 'USER', targetId: created.id, metadata: { result: 'SUCCESS' }, changes: this.audit.userChanges({}, { email: normalized, displayName: displayName.trim(), isActive: false, roles: roleNames.sort() }), context }) });
+        await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_CREATED', targetType: 'USER', targetId: created.id, metadata: { result: 'SUCCESS', establishmentId: establishment.id }, changes: this.audit.userChanges({}, { email: normalized, displayName: displayName.trim(), isActive: false, roles: roleNames.sort() }), context }) });
+        await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'ESTABLISHMENT_MEMBERSHIP_CHANGED', targetType: 'ESTABLISHMENT_MEMBERSHIP', targetId: `${establishment.id}:${created.id}`, metadata: { isActive: true, result: 'SUCCESS' }, context }) });
         return created;
       });
     } catch (error) { this.duplicate(error); throw error; }

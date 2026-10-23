@@ -5,12 +5,13 @@ import DatePicker from 'primevue/datepicker';
 import Select from 'primevue/select';
 import Textarea from 'primevue/textarea';
 import AppIcon from '@/components/AppIcon.vue';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import FormField from '@/components/FormField.vue';
 import MutationDialog from '@/components/MutationDialog.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { useCorrectInterview, useCreateInterview, useFinalizeInterview, useInterviews, useUpdateInterview, useVoidInterview } from '@/composables/useCaseContent';
+import { useCorrectInterview, useCreateInterview, useDeleteInterviewDraft, useFinalizeInterview, useInterviews, useUpdateInterview, useVoidInterview } from '@/composables/useCaseContent';
 import { useDirectory } from '@/composables/useDirectory';
 import { useSession } from '@/composables/useSession';
 import { MODALITY_OPTIONS, modalityLabel } from '@/lib/catalogs';
@@ -30,6 +31,7 @@ const create = useCreateInterview(props.caseId);
 const update = useUpdateInterview(props.caseId);
 const finalize = useFinalizeInterview(props.caseId);
 const correct = useCorrectInterview(props.caseId);
+const deleteDraft = useDeleteInterviewDraft(props.caseId);
 const voidInterview = useVoidInterview(props.caseId);
 
 const formOpen = ref(false);
@@ -45,6 +47,8 @@ const voidOpen = ref(false);
 const voidTarget = ref<Interview | null>(null);
 const voidReason = ref('');
 const voidError = ref<string | null>(null);
+const deleteTarget = ref<Interview | null>(null);
+const deleteOpen = computed({ get: () => Boolean(deleteTarget.value), set: (value: boolean) => { if (!value) deleteTarget.value = null; } });
 const actionOpen = computed({ get: () => Boolean(target.value && mode.value), set: (v: boolean) => { if (!v) { target.value = null; mode.value = null; } } });
 const formMutation = computed(() => (editing.value ? update : create));
 
@@ -86,6 +90,7 @@ async function submitVoid() {
   if (voidError.value || !voidTarget.value) return;
   try { await voidInterview.mutateAsync({ id: voidTarget.value.id, expectedVersion: voidTarget.value.version, reason: voidReason.value.trim() }); voidOpen.value = false; } catch { /* el error se muestra en el diálogo */ }
 }
+async function removeDraft() { if (!deleteTarget.value) return; await deleteDraft.mutateAsync({ id: deleteTarget.value.id, expectedVersion: deleteTarget.value.version }); deleteOpen.value = false; }
 </script>
 
 <template>
@@ -108,9 +113,10 @@ async function submitVoid() {
                   <template v-if="item.status === 'BORRADOR'">
                     <Button v-if="can('interviews.update')" size="small" severity="secondary" text aria-label="Editar borrador" title="Editar borrador" @click="openForm(item)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
                     <Button v-if="can('interviews.finalize')" size="small" severity="success" text aria-label="Finalizar entrevista" title="Finalizar entrevista" @click="ask(item, 'finalize')"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
+                    <Button v-if="can('interviews.update')" size="small" severity="danger" text aria-label="Eliminar borrador" title="Eliminar borrador" @click="deleteTarget = item"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
                   </template>
                   <Button v-else-if="can('interviews.correct')" size="small" severity="secondary" text aria-label="Corregir entrevista (reabrir como borrador)" title="Corregir entrevista (reabrir como borrador)" @click="ask(item, 'correct')"><template #icon><AppIcon name="refresh" :size="16" /></template></Button>
-                  <Button v-if="can('interviews.correct')" size="small" severity="danger" text aria-label="Anular entrevista" title="Anular entrevista" @click="askVoid(item)"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+                  <Button v-if="item.status === 'FINALIZADA' && can('interviews.correct')" size="small" severity="secondary" text aria-label="Anular entrevista finalizada" title="Anular entrevista finalizada (se conserva en la trazabilidad)" @click="askVoid(item)"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
                 </div>
               </div>
             </div>
@@ -161,6 +167,8 @@ async function submitVoid() {
       </FormField>
     </template>
   </MutationDialog>
+
+  <ConfirmActionDialog v-model:visible="deleteOpen" header="Eliminar borrador" confirm-label="Eliminar borrador" danger :message="`Se eliminará el borrador de entrevista y no quedará en el expediente ni en su línea de tiempo. Esta acción solo está disponible antes de finalizarla.`" :action="removeDraft" />
 
   <MutationDialog v-model:visible="voidOpen" header="Anular entrevista" submit-label="Anular registro" :pending="voidInterview.isPending.value" :error="voidInterview.error.value" @submit="submitVoid" @reload="query.refetch()">
     <p class="text-sm leading-relaxed text-slate-700">La entrevista dejará de aparecer en el expediente. La anulación y su motivo se conservarán en la trazabilidad.</p>

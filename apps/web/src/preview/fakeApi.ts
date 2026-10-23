@@ -10,7 +10,7 @@
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import type {
   AdminUser, AppNotification, AuditEntry, CaseDocument, CaseEvent, CaseEventType, CaseFollowUp, CaseMeasure, CaseParticipantLink, CaseRecord, CaseReferral, CaseReport, CaseStage,
-  CaseStatus, CaseSummons, CaseTask, Course, Establishment, Guardian, Interview, Participant, Permission, ProtocolTemplate, ProtocolVersion, ReferralStatus, Role, StaffMember, Student,
+  CaseStatus, CaseSummons, CaseTask, Course, Establishment, Guardian, Interview, Participant, Permission, ProtocolApplication, ProtocolTemplate, ProtocolVersion, ReferralStatus, Role, StaffMember, Student,
   SummonsStatus
 } from '@/types/api';
 import { CASE_STATUSES } from '@/types/api';
@@ -40,10 +40,10 @@ const fail = (status: number, message: string): never => { throw new FakeHttpErr
 export interface FakeDb {
   me: AdminUser; loggedOut: boolean; users: AdminUser[]; roles: Role[]; permissions: Permission[]; audit: AuditEntry[]; establishments: Establishment[]; stages: CaseStage[];
   cases: CaseRecord[]; events: CaseEvent[]; reports: CaseReport[]; participants: Participant[]; links: CaseParticipantLink[]; interviews: Interview[];
-  documents: (CaseDocument & { caseId: string; bytes: Uint8Array })[]; protocols: ProtocolTemplate[]; applications: { id: string; caseId: string; protocolVersionId: string }[];
+  documents: (CaseDocument & { caseId: string; bytes: Uint8Array })[]; protocols: ProtocolTemplate[]; applications: ProtocolApplication[];
   measures: CaseMeasure[]; followUps: CaseFollowUp[]; tasks: CaseTask[]; notifications: AppNotification[]; caseSequence: number;
   courses: Course[]; students: Student[]; guardians: Guardian[]; studentGuardians: { studentId: string; guardianId: string; relationship: string; isPrimary: boolean; createdAt: string }[];
-  staff: StaffMember[]; summons: CaseSummons[]; referrals: CaseReferral[];
+  staff: StaffMember[]; summons: CaseSummons[]; referrals: CaseReferral[]; voidedIds: string[];
 }
 
 const ago = (days: number, hours = 0) => new Date(Date.now() - days * 86_400_000 - hours * 3_600_000).toISOString();
@@ -82,14 +82,14 @@ export function seedFakeDb(): FakeDb {
     { id: uuid(), establishmentId, kind: 'ESTUDIANTE', referenceLabel: 'Estudiante A (código interno E-01)', isActive: true, createdAt: ago(20), updatedAt: ago(20) },
     { id: uuid(), establishmentId, kind: 'APODERADO', referenceLabel: 'Apoderado/a de E-01', isActive: true, createdAt: ago(20), updatedAt: ago(20) }
   ];
-  const links: CaseParticipantLink[] = participants.map((p, index) => ({ id: uuid(), caseId: first, participantId: p.id, participationCode: index === 0 ? 'AFECTADO' : 'OTRO', linkedByUserId: PREVIEW_ME_ID, linkedAt: ago(19), unlinkedAt: null, participant: p }));
+  const links: CaseParticipantLink[] = participants.map((p, index) => ({ id: uuid(), caseId: first, participantId: p.id, participationCode: index === 0 ? 'AFECTADO' : 'OTRO', version: 1, linkedByUserId: PREVIEW_ME_ID, linkedAt: ago(19), unlinkedAt: null, participant: p }));
   const reports: CaseReport[] = [{ id: uuid(), caseId: first, establishmentId, receivedAt: ago(30), channelCode: 'DIRECTO', classificationCode: 'GRAVE', factualDescription: 'Relato de ejemplo recibido por un funcionario. Texto sintético.', background: 'Antecedentes de ejemplo.', createdByUserId: PREVIEW_ME_ID, version: 1, createdAt: ago(30), updatedAt: ago(30) }];
   const interviews: Interview[] = [
     { id: uuid(), caseId: first, interviewerUserId: PREVIEW_ME_ID, occurredAt: ago(15), modalityCode: 'PRESENCIAL', summary: 'Síntesis de ejemplo de una entrevista finalizada.', restrictedNotes: 'Notas restringidas de ejemplo.', agreements: 'Acuerdos de ejemplo.', status: 'FINALIZADA', version: 3, finalizedAt: ago(15), createdAt: ago(15), updatedAt: ago(15) },
     { id: uuid(), caseId: first, interviewerUserId: PREVIEW_ME_ID, occurredAt: ago(2), modalityCode: 'VIDEOLLAMADA', summary: 'Borrador de ejemplo.', restrictedNotes: null, agreements: null, status: 'BORRADOR', version: 1, finalizedAt: null, createdAt: ago(2), updatedAt: ago(2) }
   ];
   const pdf = new TextEncoder().encode('%PDF-1.4\n% documento sintético de previsualización\n');
-  const documents = [{ id: uuid(), caseId: first, kind: 'DOCUMENTO' as const, originalFilename: 'acta-ejemplo.pdf', contentType: 'application/pdf', sizeBytes: pdf.length, sha256: 'a'.repeat(64), createdAt: ago(14), uploadedByUserId: PREVIEW_ME_ID, bytes: pdf }];
+  const documents = [{ id: uuid(), caseId: first, kind: 'DOCUMENTO' as const, originalFilename: 'acta-ejemplo.pdf', contentType: 'application/pdf', sizeBytes: pdf.length, sha256: 'a'.repeat(64), externalUrl: null, version: 1, createdAt: ago(14), uploadedByUserId: PREVIEW_ME_ID, bytes: pdf }];
 
   const versionId = '60000000-0000-4000-8000-000000000001';
   const protocols: ProtocolTemplate[] = [{
@@ -101,11 +101,11 @@ export function seedFakeDb(): FakeDb {
     { id: uuid(), caseId: second, createdByUserId: PREVIEW_ME_ID, title: 'Contacto con la familia', description: null, dueAt: ahead(6), status: 'PENDIENTE', version: 1, completedAt: null, createdAt: ago(8), updatedAt: ago(8), responsibles: [] },
     { id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, title: 'Apoyo psicosocial', description: null, dueAt: null, status: 'COMPLETADA', version: 2, completedAt: ago(3), createdAt: ago(25), updatedAt: ago(3), responsibles: [] }
   ];
-  const followUps: CaseFollowUp[] = [{ id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, occurredAt: ago(6), note: 'Seguimiento de ejemplo: se conversó con el equipo.', nextAction: 'Nueva revisión', nextActionDueAt: ahead(3), createdAt: ago(6) }];
+  const followUps: CaseFollowUp[] = [{ id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, occurredAt: ago(6), note: 'Seguimiento de ejemplo: se conversó con el equipo.', nextAction: 'Nueva revisión', nextActionDueAt: ahead(3), version: 1, createdAt: ago(6) }];
   const tasks: CaseTask[] = [
-    { id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, assignedToUserId: PREVIEW_ME_ID, title: 'Preparar informe de avance', dueAt: ago(3), status: 'PENDIENTE', completedAt: null, createdAt: ago(10), updatedAt: ago(10) },
-    { id: uuid(), caseId: second, createdByUserId: PREVIEW_ME_ID, assignedToUserId: null, title: 'Coordinar reunión con el curso', dueAt: ahead(2), status: 'PENDIENTE', completedAt: null, createdAt: ago(4), updatedAt: ago(4) },
-    { id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, assignedToUserId: null, title: 'Registrar acuerdos', dueAt: ago(8), status: 'COMPLETADA', completedAt: ago(7), createdAt: ago(12), updatedAt: ago(7) }
+    { id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, assignedToUserId: PREVIEW_ME_ID, title: 'Preparar informe de avance', dueAt: ago(3), status: 'PENDIENTE', version: 1, completedAt: null, createdAt: ago(10), updatedAt: ago(10) },
+    { id: uuid(), caseId: second, createdByUserId: PREVIEW_ME_ID, assignedToUserId: null, title: 'Coordinar reunión con el curso', dueAt: ahead(2), status: 'PENDIENTE', version: 1, completedAt: null, createdAt: ago(4), updatedAt: ago(4) },
+    { id: uuid(), caseId: first, createdByUserId: PREVIEW_ME_ID, assignedToUserId: null, title: 'Registrar acuerdos', dueAt: ago(8), status: 'COMPLETADA', version: 2, completedAt: ago(7), createdAt: ago(12), updatedAt: ago(7) }
   ];
   const notifications: AppNotification[] = [
     { id: uuid(), userId: PREVIEW_ME_ID, caseId: first, type: 'TASK_ASSIGNED', title: 'Nueva tarea asignada', body: 'Tiene una tarea asociada a un expediente.', readAt: null, createdAt: ago(0, 3) },
@@ -141,7 +141,7 @@ export function seedFakeDb(): FakeDb {
   ];
   const referrals: CaseReferral[] = [{ id: uuid(), caseId: first, typeCode: 'SALUD', institutionName: 'CESFAM de ejemplo', reason: 'Evaluación psicológica (ejemplo).', status: 'ENVIADA', contactName: null, sentAt: ago(5), responseNote: null, responseAt: null, closedAt: null, createdByUserId: PREVIEW_ME_ID, version: 2, createdAt: ago(7), updatedAt: ago(5) }];
   const establishments: Establishment[] = [{ id: establishmentId, code: 'PREVIEW', name: 'Establecimiento de previsualización', institutionalIdentifier: null, isActive: true, createdAt: ago(100), updatedAt: ago(100) }];
-  return { me: users[0]!, loggedOut: false, users, roles, permissions, audit, establishments, stages, cases, events, reports, participants, links, interviews, documents, protocols, applications: [], measures, followUps, tasks, notifications, caseSequence: cases.length + 1, courses, students, guardians, studentGuardians, staff, summons, referrals };
+  return { me: users[0]!, loggedOut: false, users, roles, permissions, audit, establishments, stages, cases, events, reports, participants, links, interviews, documents, protocols, applications: [], measures, followUps, tasks, notifications, caseSequence: cases.length + 1, courses, students, guardians, studentGuardians, staff, summons, referrals, voidedIds: [] };
 }
 
 
@@ -186,13 +186,14 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   });
   on('GET', '/users/:id', (_r, [id]) => { require('users.read'); return { status: 200, data: userView(db.users.find((u) => u.id === id) ?? fail(404, 'Usuario no encontrado')) }; });
   on('POST', '/users', (req) => {
-    require('users.create');
+    require('users.create'); require('institutions.manage');
     const email = str(body(req).email, 'email', 5, 254).toLowerCase(); const displayName = str(body(req).displayName, 'displayName', 2, 120);
+    const establishmentId = str(body(req).establishmentId, 'establishmentId', 36, 36); memberOf(establishmentId);
     const roles = Array.isArray(body(req).roles) ? (body(req).roles as string[]) : fail(400, 'roles inválido');
     if (roles.includes('SYSTEM_ADMIN')) fail(403, 'No se concede SYSTEM_ADMIN al crear cuentas');
     if (db.users.some((u) => u.email === email)) fail(409, 'El correo ya está registrado');
     const created: AdminUser = { id: uuid(), email, displayName, isActive: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), roles };
-    db.users.unshift(created); log('USER_CREATED', 'USER', created.id);
+    db.users.unshift(created); log('USER_CREATED', 'USER', created.id); log('ESTABLISHMENT_MEMBERSHIP_CHANGED', 'ESTABLISHMENT_MEMBERSHIP', `${establishmentId}:${created.id}`);
     return { status: 201, data: userView(created) };
   });
   on('PATCH', '/users/:id', (req, [id]) => {
@@ -300,7 +301,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('GET', '/cases/:id/timeline', (req, [id]) => { require('cases.timeline.read'); findCase(id); return { status: 200, data: paginate(db.events.filter((e) => e.caseId === id).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)), req.query, 50) }; });
 
   // ── Denuncias, involucrados y entrevistas ──
-  on('GET', '/cases/:id/reports', (_r, [id]) => { require('reports.read'); findCase(id); return { status: 200, data: db.reports.filter((r) => r.caseId === id) }; });
+  on('GET', '/cases/:id/reports', (_r, [id]) => { require('reports.read'); findCase(id); return { status: 200, data: db.reports.filter((r) => r.caseId === id && !db.voidedIds.includes(r.id)) }; });
   on('POST', '/cases/:id/reports', (req, [id]) => {
     require('reports.create'); const c = findCase(id); const b = body(req);
     const created: CaseReport = { id: uuid(), caseId: id, establishmentId: c.establishmentId, receivedAt: str(b.receivedAt, 'receivedAt', 8, 40), channelCode: str(b.channelCode, 'channelCode', 2, 40), classificationCode: str(b.classificationCode, 'classificationCode', 2, 40), factualDescription: str(b.factualDescription, 'factualDescription', 3), background: optStr(b.background) ?? null, createdByUserId: db.me.id, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -327,14 +328,18 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('POST', '/cases/:id/participants', (req, [id]) => {
     require('participants.manage'); const c = findCase(id); const participant = db.participants.find((p) => p.id === body(req).participantId && p.establishmentId === c.establishmentId) ?? fail(404, 'Involucrado no disponible');
     if (db.links.some((l) => l.caseId === id && l.participantId === participant.id && !l.unlinkedAt)) fail(409, 'El involucrado ya está asociado');
-    const link: CaseParticipantLink = { id: uuid(), caseId: id, participantId: participant.id, participationCode: str(body(req).participationCode, 'participationCode', 2, 40), linkedByUserId: db.me.id, linkedAt: new Date().toISOString(), unlinkedAt: null, participant };
+    const link: CaseParticipantLink = { id: uuid(), caseId: id, participantId: participant.id, participationCode: str(body(req).participationCode, 'participationCode', 2, 40), version: 1, linkedByUserId: db.me.id, linkedAt: new Date().toISOString(), unlinkedAt: null, participant };
     db.links.push(link); event(id, 'PARTICIPANT_LINKED', { relatedEntityType: 'CASE_PARTICIPANT', relatedEntityId: link.id }); return { status: 201, data: link };
+  });
+  on('PATCH', '/cases/:id/participants/:lid', (req, [id, lid]) => {
+    require('participants.manage'); findCase(id); const link = db.links.find((l) => l.id === lid && l.caseId === id && !l.unlinkedAt) ?? fail(404, 'Asociación no disponible'); const b = body(req);
+    if (link.version !== expected(b)) fail(409, 'El involucrado fue modificado por otra persona'); link.participationCode = str(b.participationCode, 'participationCode', 2, 40).toUpperCase(); link.version += 1; event(id, 'PARTICIPANT_UPDATED', { relatedEntityType: 'CASE_PARTICIPANT', relatedEntityId: lid }); return { status: 200, data: link };
   });
   on('POST', '/cases/:id/participants/:lid/unlink', (_r, [id, lid]) => {
     require('participants.manage'); findCase(id); const link = db.links.find((l) => l.id === lid && l.caseId === id && !l.unlinkedAt) ?? fail(404, 'Asociación no disponible');
     link.unlinkedAt = new Date().toISOString(); event(id, 'PARTICIPANT_UNLINKED', { relatedEntityType: 'CASE_PARTICIPANT', relatedEntityId: lid }); return { status: 201, data: link };
   });
-  on('GET', '/cases/:id/interviews', (_r, [id]) => { require('interviews.read'); findCase(id); return { status: 200, data: db.interviews.filter((i) => i.caseId === id) }; });
+  on('GET', '/cases/:id/interviews', (_r, [id]) => { require('interviews.read'); findCase(id); return { status: 200, data: db.interviews.filter((i) => i.caseId === id && !db.voidedIds.includes(i.id)) }; });
   on('POST', '/cases/:id/interviews', (req, [id]) => {
     require('interviews.create'); findCase(id); const b = body(req);
     const created: Interview = { id: uuid(), caseId: id, interviewerUserId: db.me.id, occurredAt: str(b.occurredAt, 'occurredAt', 8, 40), modalityCode: str(b.modalityCode, 'modalityCode', 2, 40).toUpperCase(), summary: str(b.summary, 'summary', 3), restrictedNotes: optStr(b.restrictedNotes) ?? null, agreements: optStr(b.agreements) ?? null, status: 'BORRADOR', version: 1, finalizedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -357,18 +362,29 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     require('interviews.correct'); const interview = interviewOf(id, iid); if (interview.status !== 'FINALIZADA') fail(404, 'Entrevista finalizada no disponible'); str(body(req).reason, 'reason', 5, 1000);
     interview.status = 'BORRADOR'; interview.finalizedAt = null; stamp(interview); event(id, 'INTERVIEW_CORRECTED', { relatedEntityType: 'INTERVIEW', relatedEntityId: iid }); return { status: 201, data: interview };
   });
+  on('DELETE', '/cases/:id/interviews/:iid', (req, [id, iid]) => {
+    require('interviews.update'); const interview = interviewOf(id, iid); if (interview.status !== 'BORRADOR' || interview.version !== expected(body(req))) fail(409, 'El borrador no está disponible para eliminar');
+    db.interviews.splice(db.interviews.indexOf(interview), 1); db.events = db.events.filter((item) => item.relatedEntityId !== iid); return { status: 200, data: { id: iid } };
+  });
 
   // ── Documentos ──
-  on('GET', '/cases/:id/documents', (_r, [id]) => { require('documents.read'); findCase(id); return { status: 200, data: db.documents.filter((d) => d.caseId === id).map(({ bytes: _bytes, ...meta }) => meta) }; });
+  on('GET', '/cases/:id/documents', (_r, [id]) => { require('documents.read'); findCase(id); return { status: 200, data: db.documents.filter((d) => d.caseId === id && !db.voidedIds.includes(d.id)).map(({ bytes: _bytes, ...meta }) => meta) }; });
   on('POST', '/cases/:id/documents', (req, [id]) => {
     require('documents.create'); findCase(id); openCase(id); const b = body(req);
+    if (b.kind === 'EVIDENCIA') {
+      const externalUrl = str(b.externalUrl, 'externalUrl', 12, 2000);
+      const parsed = (() => { try { return new URL(externalUrl); } catch { return fail(400, 'Pegue un enlace válido de OneDrive o SharePoint'); } })();
+      if (parsed.protocol !== 'https:' || !(parsed.hostname === '1drv.ms' || parsed.hostname.endsWith('.sharepoint.com'))) fail(400, 'Use un enlace institucional de OneDrive o SharePoint');
+      const linked = { id: uuid(), caseId: id, kind: 'EVIDENCIA' as const, originalFilename: str(b.originalFilename, 'originalFilename', 1, 180), contentType: 'application/vnd.microsoft.stream-link+json', sizeBytes: 0, sha256: 'c'.repeat(64), externalUrl, version: 1, createdAt: new Date().toISOString(), uploadedByUserId: db.me.id, bytes: new Uint8Array() };
+      db.documents.push(linked); event(id, 'DOCUMENT_UPLOADED', { relatedEntityType: 'CASE_DOCUMENT', relatedEntityId: linked.id }); const { bytes: _bytes, ...meta } = linked; return { status: 201, data: meta };
+    }
     if (!['application/pdf', 'image/jpeg', 'image/png'].includes(String(b.contentType))) fail(400, 'Tipo de archivo no permitido');
     const bytes = Uint8Array.from(atob(String(b.base64Content ?? '')), (ch) => ch.charCodeAt(0));
-    const created = { id: uuid(), caseId: id, kind: b.kind as CaseDocument['kind'], originalFilename: str(b.originalFilename, 'originalFilename', 1, 180), contentType: String(b.contentType), sizeBytes: bytes.length, sha256: 'b'.repeat(64), createdAt: new Date().toISOString(), uploadedByUserId: db.me.id, bytes };
+    const created = { id: uuid(), caseId: id, kind: b.kind as CaseDocument['kind'], originalFilename: str(b.originalFilename, 'originalFilename', 1, 180), contentType: String(b.contentType), sizeBytes: bytes.length, sha256: 'b'.repeat(64), externalUrl: null, version: 1, createdAt: new Date().toISOString(), uploadedByUserId: db.me.id, bytes };
     db.documents.push(created); event(id, 'DOCUMENT_UPLOADED', { relatedEntityType: 'CASE_DOCUMENT', relatedEntityId: created.id }); const { bytes: _b, ...meta } = created; return { status: 201, data: meta };
   });
   on('GET', '/cases/:id/documents/:did/download', (_r, [id, did]) => {
-    require('documents.read'); findCase(id); const doc = db.documents.find((d) => d.id === did && d.caseId === id) ?? fail(404, 'Documento no disponible');
+    require('documents.read'); findCase(id); const doc = db.documents.find((d) => d.id === did && d.caseId === id) ?? fail(404, 'Documento no disponible'); if (doc.externalUrl) fail(409, 'La evidencia audiovisual se abre desde OneDrive o SharePoint');
     return { status: 200, data: new Blob([doc.bytes.slice().buffer], { type: doc.contentType }) };
   });
 
@@ -387,8 +403,14 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('POST', '/cases/:id/protocols/:vid', (_r, [id, vid]) => {
     require('protocols.read'); findCase(id); if (!db.protocols.some((p) => p.versions.some((v) => v.id === vid && v.status === 'PUBLICADO'))) fail(404, 'Protocolo publicado no disponible');
     if (db.applications.some((a) => a.caseId === id && a.protocolVersionId === vid)) fail(409, 'El protocolo ya está aplicado');
-    const application = { id: uuid(), caseId: id, protocolVersionId: vid, appliedByUserId: db.me.id, appliedAt: new Date().toISOString() }; db.applications.push(application);
+    const application: ProtocolApplication = { id: uuid(), caseId: id, protocolVersionId: vid, appliedByUserId: db.me.id, appliedAt: new Date().toISOString(), revokedAt: null, revocationReason: null, version: 1 }; db.applications.push(application);
     event(id, 'PROTOCOL_APPLIED', { relatedEntityType: 'PROTOCOL_VERSION', relatedEntityId: vid }); return { status: 201, data: application };
+  });
+  on('GET', '/cases/:id/protocol-applications', (_r, [id]) => { require('protocols.read'); findCase(id); return { status: 200, data: db.applications.filter((application) => application.caseId === id) }; });
+  on('POST', '/cases/:id/protocol-applications/:aid/revoke', (req, [id, aid]) => {
+    require('protocols.read'); findCase(id); const application = db.applications.find((item) => item.id === aid && item.caseId === id) ?? fail(404, 'Aplicación de protocolo no disponible'); const b = body(req);
+    if (application.version !== expected(b)) fail(409, 'La aplicación del protocolo fue modificada por otra persona'); if (application.revokedAt) fail(409, 'La aplicación del protocolo ya fue revocada'); application.revokedAt = new Date().toISOString(); application.revocationReason = str(b.reason, 'reason', 5, 1000); application.version += 1;
+    event(id, 'PROTOCOL_REVOKED', { relatedEntityType: 'CASE_PROTOCOL_APPLICATION', relatedEntityId: aid }); return { status: 201, data: application };
   });
   on('GET', '/cases/:id/measures', (_r, [id]) => { require('measures.read'); findCase(id); return { status: 200, data: db.measures.filter((m) => m.caseId === id) }; });
   on('POST', '/cases/:id/measures', (req, [id]) => {
@@ -402,21 +424,25 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     if (b.status) { measure.status = b.status as CaseMeasure['status']; measure.completedAt = b.status === 'COMPLETADA' ? new Date().toISOString() : null; } if ('dueAt' in b) measure.dueAt = (b.dueAt as string | null) ?? null;
     stamp(measure); event(id, 'MEASURE_UPDATED', { relatedEntityType: 'CASE_MEASURE', relatedEntityId: mid }); return { status: 201, data: measure };
   });
-  on('GET', '/cases/:id/follow-ups', (_r, [id]) => { require('follow-ups.read'); findCase(id); return { status: 200, data: db.followUps.filter((f) => f.caseId === id) }; });
+  on('GET', '/cases/:id/follow-ups', (_r, [id]) => { require('follow-ups.read'); findCase(id); return { status: 200, data: db.followUps.filter((f) => f.caseId === id && !db.voidedIds.includes(f.id)) }; });
   on('POST', '/cases/:id/follow-ups', (req, [id]) => {
     require('follow-ups.create'); findCase(id); const b = body(req);
-    const created: CaseFollowUp = { id: uuid(), caseId: id, createdByUserId: db.me.id, occurredAt: str(b.occurredAt, 'occurredAt', 8, 40), note: str(b.note, 'note', 3), nextAction: optStr(b.nextAction) ?? null, nextActionDueAt: optStr(b.nextActionDueAt) ?? null, createdAt: new Date().toISOString() };
+    const created: CaseFollowUp = { id: uuid(), caseId: id, createdByUserId: db.me.id, occurredAt: str(b.occurredAt, 'occurredAt', 8, 40), note: str(b.note, 'note', 3), nextAction: optStr(b.nextAction) ?? null, nextActionDueAt: optStr(b.nextActionDueAt) ?? null, version: 1, createdAt: new Date().toISOString() };
     db.followUps.push(created); event(id, 'FOLLOW_UP_CREATED', { relatedEntityType: 'CASE_FOLLOW_UP', relatedEntityId: created.id }); return { status: 201, data: created };
   });
   on('GET', '/cases/:id/tasks', (_r, [id]) => { require('tasks.read'); findCase(id); return { status: 200, data: db.tasks.filter((t) => t.caseId === id) }; });
   on('POST', '/cases/:id/tasks', (req, [id]) => {
     require('tasks.manage'); findCase(id); const b = body(req);
-    const created: CaseTask = { id: uuid(), caseId: id, createdByUserId: db.me.id, assignedToUserId: (b.assignedToUserId as string) ?? null, title: str(b.title, 'title', 3, 300), dueAt: optStr(b.dueAt) ?? null, status: 'PENDIENTE', completedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const created: CaseTask = { id: uuid(), caseId: id, createdByUserId: db.me.id, assignedToUserId: (b.assignedToUserId as string) ?? null, title: str(b.title, 'title', 3, 300), dueAt: optStr(b.dueAt) ?? null, status: 'PENDIENTE', version: 1, completedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     db.tasks.push(created); event(id, 'TASK_CREATED', { relatedEntityType: 'CASE_TASK', relatedEntityId: created.id }); return { status: 201, data: created };
   });
   on('POST', '/cases/:id/tasks/:tid/complete', (_r, [id, tid]) => {
     require('tasks.manage'); findCase(id); const task = db.tasks.find((t) => t.id === tid && t.caseId === id && t.status === 'PENDIENTE') ?? fail(404, 'Tarea pendiente no disponible');
     task.status = 'COMPLETADA'; task.completedAt = new Date().toISOString(); stamp(task); event(id, 'TASK_COMPLETED', { relatedEntityType: 'CASE_TASK', relatedEntityId: tid }); return { status: 201, data: task };
+  });
+  on('POST', '/cases/:id/tasks/:tid/update', (req, [id, tid]) => {
+    require('tasks.manage'); findCase(id); const task = db.tasks.find((t) => t.id === tid && t.caseId === id && t.status === 'PENDIENTE') ?? fail(404, 'Tarea pendiente no disponible'); const b = body(req);
+    if (task.version !== expected(b)) fail(409, 'La tarea fue modificada por otra persona'); if (b.title !== undefined) task.title = str(b.title, 'title', 3, 300); if (b.dueAt !== undefined) task.dueAt = optStr(b.dueAt) ?? null; if (b.assignedToUserId !== undefined) task.assignedToUserId = optStr(b.assignedToUserId) ?? null; if (b.status === 'CANCELADA') task.status = 'CANCELADA'; else if (b.status !== undefined) fail(400, 'Estado de tarea no permitido'); stamp(task); event(id, task.status === 'CANCELADA' ? 'TASK_CANCELLED' : 'TASK_UPDATED', { relatedEntityType: 'CASE_TASK', relatedEntityId: tid }); return { status: 201, data: task };
   });
   on('GET', '/notifications', () => { require('notifications.read'); return { status: 200, data: [...db.notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }; });
   on('POST', '/notifications/:nid/read', (_r, [nid]) => {
@@ -624,6 +650,29 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     const list = db.referrals.filter((r) => (!q.status || r.status === q.status) && (!q.establishmentId || findCase(r.caseId).establishmentId === q.establishmentId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return { status: 200, data: paginate(list.map((r) => ({ ...r, case: caseRef(r.caseId) })), q, 25) };
   });
+
+  // ── Anulaciones (se conservan con motivo) y eliminaciones definitivas (registros aún reversibles) ──
+  const reason = (b: Req['body']) => str(b.reason, 'reason', 5, 1000);
+  const voidIt = (list: { id: string; caseId: string; version: number }[], permission: string, type: CaseEventType, entity: string) => (req: Req, [id, rid]: Params) => {
+    require(permission); openCase(id); const b = body(req); const item = list.find((x) => x.id === rid && x.caseId === id && !db.voidedIds.includes(x.id)) ?? fail(404, 'Registro no disponible');
+    reason(b); if (item.version !== expected(b)) fail(409, 'El registro fue modificado por otra persona');
+    db.voidedIds.push(rid); event(id, type, { relatedEntityType: entity, relatedEntityId: rid }); log(type, entity, rid); return { status: 201, data: item };
+  };
+  const dropEvents = (id: string, entityId: string) => { db.events = db.events.filter((e) => !(e.caseId === id && e.relatedEntityId === entityId)); };
+  const dropIt = <T extends { id: string; caseId: string; version: number }>(list: T[], permission: string, entity: string, ready: (item: T) => boolean = () => true) => (req: Req, [id, rid]: Params) => {
+    require(permission); openCase(id); const item = list.find((x) => x.id === rid && x.caseId === id && !db.voidedIds.includes(x.id)) ?? fail(404, 'Registro no disponible');
+    if (item.version !== expected(body(req)) || !ready(item)) fail(409, 'El registro fue modificado o ya no está disponible para eliminar');
+    list.splice(list.indexOf(item), 1); dropEvents(id, rid); log(`${entity}_DELETED`, entity, rid); return { status: 200, data: { id: rid } };
+  };
+  on('POST', '/cases/:id/reports/:rid/void', voidIt(db.reports, 'reports.update', 'REPORT_VOIDED', 'CASE_REPORT'));
+  on('POST', '/cases/:id/interviews/:rid/void', voidIt(db.interviews, 'interviews.correct', 'INTERVIEW_VOIDED', 'INTERVIEW'));
+  on('POST', '/cases/:id/documents/:rid/void', voidIt(db.documents, 'documents.create', 'DOCUMENT_VOIDED', 'CASE_DOCUMENT'));
+  on('POST', '/cases/:id/follow-ups/:rid/void', voidIt(db.followUps, 'follow-ups.create', 'FOLLOW_UP_VOIDED', 'CASE_FOLLOW_UP'));
+  on('DELETE', '/cases/:id/reports/:rid', dropIt(db.reports, 'reports.update', 'REPORT'));
+  on('DELETE', '/cases/:id/documents/:rid', dropIt(db.documents, 'documents.create', 'DOCUMENT'));
+  on('DELETE', '/cases/:id/follow-ups/:rid', dropIt(db.followUps, 'follow-ups.create', 'FOLLOW_UP'));
+  on('DELETE', '/cases/:id/tasks/:rid', dropIt(db.tasks, 'tasks.manage', 'TASK', (task) => task.status === 'PENDIENTE'));
+  on('DELETE', '/cases/:id/protocol-applications/:rid', dropIt(db.applications, 'protocols.read', 'PROTOCOL_APPLICATION', (application) => !application.revokedAt));
 
   const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
   const PUBLIC_WRITES = new Set(['/auth/login', '/auth/forgot-password', '/auth/reset-password', '/auth/accept-invitation']);

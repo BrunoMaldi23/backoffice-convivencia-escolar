@@ -81,18 +81,26 @@ enum CaseEventType {
   CASE_REOPENED
   REPORT_CREATED
   REPORT_UPDATED
+  REPORT_VOIDED
   PARTICIPANT_LINKED
+  PARTICIPANT_UPDATED
   PARTICIPANT_UNLINKED
   INTERVIEW_CREATED
   INTERVIEW_FINALIZED
   INTERVIEW_CORRECTED
+  INTERVIEW_VOIDED
   DOCUMENT_UPLOADED
+  DOCUMENT_VOIDED
   PROTOCOL_APPLIED
+  PROTOCOL_REVOKED
   MEASURE_CREATED
   MEASURE_UPDATED
   FOLLOW_UP_CREATED
+  FOLLOW_UP_VOIDED
   TASK_CREATED
+  TASK_UPDATED
   TASK_COMPLETED
+  TASK_CANCELLED
   NOTIFICATION_CREATED
   SUMMONS_CREATED
   SUMMONS_UPDATED
@@ -251,6 +259,8 @@ model Interview {
   status InterviewStatus @default(BORRADOR)
   version Int @default(1)
   finalizedAt DateTime? @map("finalized_at")
+  voidedAt DateTime? @map("voided_at")
+  voidReason String? @map("void_reason")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
@@ -282,6 +292,10 @@ model CaseDocument {
   contentType String @map("content_type")
   sizeBytes Int @map("size_bytes")
   sha256 String
+  externalUrl String? @map("external_url")
+  version Int @default(1)
+  voidedAt DateTime? @map("voided_at")
+  voidReason String? @map("void_reason")
   createdAt DateTime @default(now()) @map("created_at")
   case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
   uploadedByUser User @relation("CaseDocumentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
@@ -327,6 +341,9 @@ model CaseProtocolApplication {
   protocolVersionId String @map("protocol_version_id")
   appliedByUserId String @map("applied_by_user_id")
   appliedAt DateTime @default(now()) @map("applied_at")
+  revokedAt DateTime? @map("revoked_at")
+  revocationReason String? @map("revocation_reason")
+  version Int @default(1)
   case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
   protocolVersion ProtocolVersion @relation(fields: [protocolVersionId], references: [id], onDelete: Restrict)
   appliedByUser User @relation("ProtocolApplicationActor", fields: [appliedByUserId], references: [id], onDelete: Restrict)
@@ -371,6 +388,9 @@ model CaseFollowUp {
   note String
   nextAction String? @map("next_action")
   nextActionDueAt DateTime? @map("next_action_due_at")
+  version Int @default(1)
+  voidedAt DateTime? @map("voided_at")
+  voidReason String? @map("void_reason")
   createdAt DateTime @default(now()) @map("created_at")
   case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
   createdByUser User @relation("CaseFollowUpCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -386,6 +406,7 @@ model CaseTask {
   title String
   dueAt DateTime? @map("due_at")
   status TaskStatus @default(PENDIENTE)
+  version Int @default(1)
   completedAt DateTime? @map("completed_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -423,6 +444,8 @@ model CaseReport {
   background String?
   createdByUserId String @map("created_by_user_id")
   version Int @default(1)
+  voidedAt DateTime? @map("voided_at")
+  voidReason String? @map("void_reason")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
@@ -461,6 +484,7 @@ model CaseParticipant {
   caseId String @map("case_id")
   participantId String @map("participant_id")
   participationCode String @map("participation_code")
+  version Int @default(1)
   linkedByUserId String @map("linked_by_user_id")
   linkedAt DateTime @default(now()) @map("linked_at")
   unlinkedAt DateTime? @map("unlinked_at")

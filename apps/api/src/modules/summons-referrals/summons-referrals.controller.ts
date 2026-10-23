@@ -40,6 +40,9 @@ class CreateReferralDto {
 }
 class UpdateReferralDto {
   @version() @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiPropertyOptional({ description: 'Solo mientras la derivación esté pendiente' }) @IsOptional() @IsString() @MinLength(2) @MaxLength(40) typeCode?: string;
+  @ApiPropertyOptional({ description: 'Solo mientras la derivación esté pendiente' }) @IsOptional() @IsString() @MinLength(2) @MaxLength(200) institutionName?: string;
+  @ApiPropertyOptional({ description: 'Solo mientras la derivación esté pendiente' }) @IsOptional() @IsString() @MinLength(3) @MaxLength(2000) reason?: string;
   @ApiPropertyOptional({ enum: ReferralStatus }) @IsOptional() @IsEnum(ReferralStatus) status?: ReferralStatus;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(160) contactName?: string | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(2000) responseNote?: string | null;

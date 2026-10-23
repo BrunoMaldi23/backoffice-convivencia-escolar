@@ -35,9 +35,10 @@ export interface CaseRecord {
 
 export type CaseEventType =
   | 'CASE_CREATED' | 'CASE_UPDATED' | 'CASE_ASSIGNED' | 'CASE_STAGE_CHANGED' | 'CASE_TRANSITIONED' | 'CASE_PAUSED' | 'CASE_RESUMED' | 'CASE_RESOLVED' | 'CASE_CLOSED'
-  | 'CASE_REOPENED' | 'REPORT_CREATED' | 'REPORT_UPDATED' | 'PARTICIPANT_LINKED' | 'PARTICIPANT_UNLINKED' | 'INTERVIEW_CREATED' | 'INTERVIEW_FINALIZED'
-  | 'INTERVIEW_CORRECTED' | 'DOCUMENT_UPLOADED' | 'PROTOCOL_APPLIED' | 'MEASURE_CREATED' | 'MEASURE_UPDATED' | 'FOLLOW_UP_CREATED' | 'TASK_CREATED'
-  | 'TASK_COMPLETED' | 'NOTIFICATION_CREATED' | 'SUMMONS_CREATED' | 'SUMMONS_UPDATED' | 'REFERRAL_CREATED' | 'REFERRAL_UPDATED';
+  | 'CASE_REOPENED' | 'REPORT_CREATED' | 'REPORT_UPDATED' | 'REPORT_VOIDED' | 'PARTICIPANT_LINKED' | 'PARTICIPANT_UPDATED' | 'PARTICIPANT_UNLINKED' | 'INTERVIEW_CREATED' | 'INTERVIEW_FINALIZED'
+  | 'INTERVIEW_CORRECTED' | 'INTERVIEW_VOIDED' | 'DOCUMENT_UPLOADED' | 'DOCUMENT_VOIDED' | 'PROTOCOL_APPLIED' | 'PROTOCOL_REVOKED' | 'MEASURE_CREATED' | 'MEASURE_UPDATED' | 'FOLLOW_UP_CREATED' | 'FOLLOW_UP_VOIDED' | 'TASK_CREATED'
+  | 'TASK_UPDATED' | 'TASK_COMPLETED' | 'TASK_CANCELLED' | 'NOTIFICATION_CREATED' | 'SUMMONS_CREATED' | 'SUMMONS_UPDATED' | 'REFERRAL_CREATED' | 'REFERRAL_UPDATED';
+export type TimelineMode = 'relevant' | 'all';
 
 export interface CaseEvent {
   id: Uuid; caseId: Uuid; actorUserId: Uuid | null; occurredAt: IsoDate; eventType: CaseEventType; previousStatus: CaseStatus | null; newStatus: CaseStatus | null;
@@ -54,7 +55,7 @@ export interface Participant {
   id: Uuid; establishmentId: Uuid; kind: ParticipantKind; referenceLabel: string; studentId?: Uuid | null; guardianId?: Uuid | null; staffMemberId?: Uuid | null;
   isActive: boolean; createdAt: IsoDate; updatedAt: IsoDate;
 }
-export interface CaseParticipantLink { id: Uuid; caseId: Uuid; participantId: Uuid; participationCode: string; linkedByUserId: Uuid; linkedAt: IsoDate; unlinkedAt: IsoDate | null; participant: Participant }
+export interface CaseParticipantLink { id: Uuid; caseId: Uuid; participantId: Uuid; participationCode: string; version: number; linkedByUserId: Uuid; linkedAt: IsoDate; unlinkedAt: IsoDate | null; participant: Participant }
 
 export type InterviewStatus = 'BORRADOR' | 'FINALIZADA';
 export interface Interview {
@@ -64,12 +65,12 @@ export interface Interview {
 
 export type DocumentKind = 'DOCUMENTO' | 'EVIDENCIA';
 /** Metadatos de un documento. La clave interna de almacenamiento (`storageKey`) nunca se muestra ni se usa. */
-export interface CaseDocument { id: Uuid; caseId?: Uuid; kind: DocumentKind; originalFilename: string; contentType: string; sizeBytes: number; sha256: string; createdAt: IsoDate; uploadedByUserId: Uuid }
+export interface CaseDocument { id: Uuid; caseId?: Uuid; kind: DocumentKind; originalFilename: string; contentType: string; sizeBytes: number; sha256: string; externalUrl: string | null; version: number; createdAt: IsoDate; uploadedByUserId: Uuid }
 
 export type ProtocolVersionStatus = 'BORRADOR' | 'PUBLICADO' | 'RETIRADO';
 export interface ProtocolVersion { id: Uuid; protocolTemplateId: Uuid; version: number; title: string; content: unknown; status: ProtocolVersionStatus; createdByUserId: Uuid; publishedAt: IsoDate | null; createdAt: IsoDate }
 export interface ProtocolTemplate { id: Uuid; establishmentId: Uuid; code: string; name: string; isActive: boolean; createdAt: IsoDate; updatedAt: IsoDate; versions: ProtocolVersion[] }
-export interface ProtocolApplication { id: Uuid; caseId: Uuid; protocolVersionId: Uuid; appliedByUserId: Uuid; appliedAt: IsoDate }
+export interface ProtocolApplication { id: Uuid; caseId: Uuid; protocolVersionId: Uuid; appliedByUserId: Uuid; appliedAt: IsoDate; revokedAt: IsoDate | null; revocationReason: string | null; version: number }
 
 export type MeasureStatus = 'PENDIENTE' | 'COMPLETADA' | 'CANCELADA';
 export interface CaseMeasure {
@@ -77,10 +78,10 @@ export interface CaseMeasure {
   createdAt: IsoDate; updatedAt: IsoDate; responsibles: { measureId: Uuid; userId: Uuid; assignedAt: IsoDate }[];
 }
 
-export interface CaseFollowUp { id: Uuid; caseId: Uuid; createdByUserId: Uuid; occurredAt: IsoDate; note: string; nextAction: string | null; nextActionDueAt: IsoDate | null; createdAt: IsoDate }
+export interface CaseFollowUp { id: Uuid; caseId: Uuid; createdByUserId: Uuid; occurredAt: IsoDate; note: string; nextAction: string | null; nextActionDueAt: IsoDate | null; version: number; createdAt: IsoDate }
 
 export type TaskStatus = 'PENDIENTE' | 'COMPLETADA' | 'CANCELADA';
-export interface CaseTask { id: Uuid; caseId: Uuid; createdByUserId: Uuid; assignedToUserId: Uuid | null; title: string; dueAt: IsoDate | null; status: TaskStatus; completedAt: IsoDate | null; createdAt: IsoDate; updatedAt: IsoDate }
+export interface CaseTask { id: Uuid; caseId: Uuid; createdByUserId: Uuid; assignedToUserId: Uuid | null; title: string; dueAt: IsoDate | null; status: TaskStatus; version: number; completedAt: IsoDate | null; createdAt: IsoDate; updatedAt: IsoDate }
 
 export interface AppNotification { id: Uuid; userId: Uuid; caseId: Uuid | null; type: string; title: string; body: string; readAt: IsoDate | null; createdAt: IsoDate }
 
@@ -127,4 +128,4 @@ export interface TaskInput { title: string; dueAt?: IsoDate; assignedToUserId?: 
 export interface SummonsInput { participantId?: Uuid; recipientLabel?: string; scheduledAt: IsoDate; location: string; reason: string }
 export interface UpdateSummonsInput { expectedVersion: number; status?: SummonsStatus; scheduledAt?: IsoDate; location?: string; reason?: string; outcomeNote?: string }
 export interface ReferralInput { typeCode: string; institutionName: string; reason: string; contactName?: string }
-export interface UpdateReferralInput { expectedVersion: number; status?: ReferralStatus; contactName?: string | null; responseNote?: string | null }
+export interface UpdateReferralInput { expectedVersion: number; typeCode?: string; institutionName?: string; reason?: string; status?: ReferralStatus; contactName?: string | null; responseNote?: string | null }

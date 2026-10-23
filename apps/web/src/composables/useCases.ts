@@ -1,7 +1,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 import { keepPreviousData, useQuery } from '@tanstack/vue-query';
 import * as api from '@/services/cases';
-import type { CaseListFilters, CaseRecord, CreateCaseInput, TransitionInput, UpdateCaseInput } from '@/types/api';
+import type { CaseListFilters, CaseRecord, CreateCaseInput, TimelineMode, TransitionInput, UpdateCaseInput } from '@/types/api';
 import { caseScope, useApiMutation } from './useApiMutation';
 
 /** Límite de expedientes que se traen para calcular indicadores y vistas globales (la API pagina de 100 en 100). */
@@ -21,8 +21,8 @@ export async function fetchAllCases(): Promise<{ items: CaseRecord[]; total: num
 export const useAllCases = (enabled: MaybeRefOrGetter<boolean> = true) => useQuery({ queryKey: ['cases', 'all'], queryFn: fetchAllCases, enabled, staleTime: 60_000 });
 
 export const useCase = (id: MaybeRefOrGetter<string>) => useQuery({ queryKey: computed(() => ['case', toValue(id), 'detail']), queryFn: () => api.getCase(toValue(id)) });
-export const useTimeline = (id: MaybeRefOrGetter<string>, page: MaybeRefOrGetter<number> = 1) =>
-  useQuery({ queryKey: computed(() => ['case', toValue(id), 'timeline', toValue(page)]), queryFn: () => api.getTimeline(toValue(id), toValue(page)), placeholderData: keepPreviousData });
+export const useTimeline = (id: MaybeRefOrGetter<string>, page: MaybeRefOrGetter<number> = 1, limit = 12, mode: MaybeRefOrGetter<TimelineMode> = 'relevant') =>
+  useQuery({ queryKey: computed(() => ['case', toValue(id), 'timeline', toValue(page), limit, toValue(mode)]), queryFn: () => api.getTimeline(toValue(id), toValue(page), limit, toValue(mode)), placeholderData: keepPreviousData });
 
 export const useCreateCase = () => useApiMutation((input: CreateCaseInput) => api.createCase(input), (created) => caseScope(created.id));
 export const useUpdateCase = (caseId: string) => useApiMutation((input: UpdateCaseInput) => api.updateCase(caseId, input), () => caseScope(caseId));
@@ -40,7 +40,7 @@ export const useAppliedProtocolVersions = (id: MaybeRefOrGetter<string>, enabled
     queryFn: async () => {
       const applied = new Set<string>();
       for (let page = 1; ; page += 1) {
-        const result = await api.getTimeline(toValue(id), page, 100);
+        const result = await api.getTimeline(toValue(id), page, 100, 'all');
         for (const event of result.items) if (event.eventType === 'PROTOCOL_APPLIED' && event.relatedEntityId) applied.add(event.relatedEntityId);
         if (page * 100 >= result.total) return applied;
       }

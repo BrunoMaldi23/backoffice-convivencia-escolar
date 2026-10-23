@@ -43,7 +43,8 @@ class ListCasesDto {
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @ApiPropertyOptional({ default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 20;
 }
-class PageDto { @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1; @ApiPropertyOptional({ default: 50 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 50; }
+enum TimelineMode { RELEVANT = 'relevant', ALL = 'all' }
+class PageDto { @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1; @ApiPropertyOptional({ default: 50 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 50; @ApiPropertyOptional({ enum: TimelineMode, default: TimelineMode.RELEVANT, description: 'relevant muestra hitos de gestión; all conserva el registro de auditoría completo.' }) @IsOptional() @IsEnum(TimelineMode) mode: TimelineMode = TimelineMode.RELEVANT; }
 
 @ApiTags('cases') @ApiCookieAuth() @ApiUnauthorizedResponse({ description: 'Sesión ausente, vencida o revocada' }) @ApiForbiddenResponse({ description: 'CSRF o permiso insuficiente' }) @ApiNotFoundResponse({ description: 'Expediente o establecimiento no disponible' }) @ApiTooManyRequestsResponse({ description: 'Límite de solicitudes excedido' }) @Controller('cases') @UseGuards(SessionGuard, CsrfGuard, PermissionsGuard)
 export class CasesController {
@@ -61,5 +62,5 @@ export class CasesController {
   @Post(':id/transition') @RequirePermissions('cases.transition') @ApiBadRequestResponse({ description: 'Transición o motivo inválido' }) @ApiConflictResponse({ description: 'Versión obsoleta' })
   transition(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: TransitionCaseDto) { return this.cases.transition(req.actorId!, id, dto, auditContext(req)); }
   @Get(':id/timeline') @RequirePermissions('cases.timeline.read') @ApiOperation({ summary: 'Consulta línea de tiempo inmutable' })
-  timeline(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Query() q: PageDto) { return this.cases.timeline(req.actorId!, id, q.page, q.limit); }
+  timeline(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Query() q: PageDto) { return this.cases.timeline(req.actorId!, id, q.page, q.limit, q.mode); }
 }

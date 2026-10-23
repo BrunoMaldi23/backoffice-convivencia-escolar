@@ -84,3 +84,9 @@ export function parseStudentsCsv(text: string): ParsedStudents {
 
 /** Plantilla descargable con una fila de ejemplo ficticia. */
 export const STUDENTS_CSV_TEMPLATE = 'RUT;Nombres;Apellidos;Fecha de nacimiento;Curso\n11.111.111-1;Nombre de ejemplo;Apellido de ejemplo;21-03-2015;1° Básico A\n';
+
+/** Serializa una tabla pequeña para descarga en Excel con separador habitual en Chile. */
+export function serializeCsv(rows: readonly (readonly string[])[]): string {
+  const cell = (value: string) => /[;"\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  return `\uFEFF${rows.map((row) => row.map(cell).join(';')).join('\r\n')}\r\n`;
+}

@@ -8,7 +8,7 @@ export interface UserListQuery { page?: number; limit?: number; search?: string;
 export const listUsers = async (query: UserListQuery = {}): Promise<Page<AdminUser>> =>
   (await api.get<Page<AdminUser>>('/users', { params: { page: query.page ?? 1, limit: query.limit ?? 20, search: query.search || undefined, role: query.role || undefined, active: query.active } })).data;
 export const getUser = async (id: Uuid): Promise<AdminUser> => (await api.get<AdminUser>(`/users/${id}`)).data;
-export const createUser = async (input: { email: string; displayName: string; roles: string[] }): Promise<AdminUser> => (await api.post<AdminUser>('/users', input)).data;
+export const createUser = async (input: { email: string; displayName: string; roles: string[]; establishmentId: Uuid }): Promise<AdminUser> => (await api.post<AdminUser>('/users', input)).data;
 export const updateUser = async (id: Uuid, input: { email?: string; displayName?: string }): Promise<AdminUser> => (await api.patch<AdminUser>(`/users/${id}`, input)).data;
 export const setUserStatus = async (id: Uuid, isActive: boolean): Promise<AdminUser> => (await api.patch<AdminUser>(`/users/${id}/status`, { isActive })).data;
 export const assignUserRoles = async (id: Uuid, roles: string[]): Promise<AdminUser> => (await api.patch<AdminUser>(`/users/${id}/roles`, { roles })).data;
