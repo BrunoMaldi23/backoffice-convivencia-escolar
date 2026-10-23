@@ -9,3 +9,5 @@ La API REST usa el prefijo global `/api`, JSON y nombres de recursos en minúscu
 | GET | `/api/health` | Estado de API y conexión real a PostgreSQL |
 
 La respuesta de salud no expone configuración, usuarios ni secretos. Los errores de validación usan el `ValidationPipe` global de NestJS.
+
+El [contrato propuesto de Casos](cases-proposed-contract.md) es documental para Fase 2A; sus rutas todavía no están implementadas.
