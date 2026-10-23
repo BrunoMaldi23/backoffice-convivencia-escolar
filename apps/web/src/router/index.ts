@@ -19,12 +19,6 @@ const page = (title: string, parents: Crumb[] = [], extra: Partial<RouteRecordRa
 const CASES: Crumb = { label: 'Casos', to: '/casos' };
 const ADMIN: Crumb = { label: 'Administración' };
 
-/** Módulos que todavía no tienen API en el backend: una sola vista explica qué falta (ver docs/frontend/api-integration.md). */
-const pendingModules = [
-  ['estudiantes', 'students', 'Estudiantes'], ['apoderados', 'guardians', 'Apoderados'], ['funcionarios', 'staff', 'Funcionarios'],
-  ['cursos', 'courses', 'Cursos'], ['citaciones', 'citations', 'Citaciones'], ['derivaciones', 'referrals', 'Derivaciones']
-] as const;
-
 /**
  * Cada pantalla pública tiene su propio padre con `AuthLayout`. Un padre común en `/` competiría con el
  * panel de inicio (también en `/`) y dejaría la raíz sin contenido.
@@ -64,9 +58,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'reportes', name: 'reports', component: () => import('@/modules/reports/ReportsView.vue'), meta: page('Reportes', [], { permission: 'cases.read' }) },
       { path: 'notificaciones', name: 'notifications', component: () => import('@/modules/notifications/NotificationsView.vue'), meta: page('Notificaciones', [], { permission: 'notifications.read' }) },
 
-      ...pendingModules.map(([path, module, title]): RouteRecordRaw => ({
-        path, name: module, component: () => import('@/modules/pending/PendingModuleView.vue'), props: { module }, meta: page(title)
-      })),
+      { path: 'estudiantes', name: 'students', component: () => import('@/modules/community/StudentsView.vue'), meta: page('Estudiantes', [], { permission: 'students.read' }) },
+      { path: 'estudiantes/:id', name: 'students-detail', component: () => import('@/modules/community/StudentDetailView.vue'), props: true, meta: page('Ficha del estudiante', [{ label: 'Estudiantes', to: '/estudiantes' }], { permission: 'students.read' }) },
+      { path: 'apoderados', name: 'guardians', component: () => import('@/modules/community/GuardiansView.vue'), meta: page('Apoderados', [], { permission: 'guardians.read' }) },
+      { path: 'apoderados/:id', name: 'guardians-detail', component: () => import('@/modules/community/GuardianDetailView.vue'), props: true, meta: page('Ficha del apoderado', [{ label: 'Apoderados', to: '/apoderados' }], { permission: 'guardians.read' }) },
+      { path: 'funcionarios', name: 'staff', component: () => import('@/modules/community/StaffView.vue'), meta: page('Funcionarios', [], { permission: 'staff.read' }) },
+      { path: 'cursos', name: 'courses', component: () => import('@/modules/community/CoursesView.vue'), meta: page('Cursos', [], { permission: 'courses.read' }) },
+      { path: 'citaciones', name: 'summons', component: () => import('@/modules/summons/SummonsView.vue'), meta: page('Citaciones', [], { permission: 'summons.read' }) },
+      { path: 'derivaciones', name: 'referrals', component: () => import('@/modules/referrals/ReferralsView.vue'), meta: page('Derivaciones', [], { permission: 'referrals.read' }) },
 
       { path: 'administracion/usuarios', name: 'users', component: () => import('@/modules/users/UsersView.vue'), meta: page('Usuarios', [ADMIN], { permission: 'users.read' }) },
       { path: 'administracion/usuarios/:id', name: 'users-detail', component: () => import('@/modules/users/UserDetailView.vue'), props: true, meta: page('Detalle de usuario', [ADMIN, { label: 'Usuarios', to: '/administracion/usuarios' }], { permission: 'users.read' }) },

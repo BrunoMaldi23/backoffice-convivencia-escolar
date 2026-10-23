@@ -1,8 +1,8 @@
 # Integración del frontend con la API
 
-Estado al 2026-10-23. Base de referencia: [backend-contracts.md](../api/backend-contracts.md) y [frontend-integration-guide.md](../api/frontend-integration-guide.md).
+Estado al 2026-10-23. Base de referencia: [backend-contracts.md](../api/backend-contracts.md), [community-contract.md](../api/community-contract.md) y [frontend-integration-guide.md](../api/frontend-integration-guide.md).
 
-## Cobertura de las 64 operaciones
+## Cobertura de las 93 operaciones
 
 | Dominio | Operaciones | Estado en la interfaz |
 | --- | --- | --- |
@@ -21,40 +21,48 @@ Estado al 2026-10-23. Base de referencia: [backend-contracts.md](../api/backend-
 | Protocolos | `GET /protocols/:establishmentId`, `POST /protocols`, `POST …/versions/:id/publish`, `POST /cases/:id/protocols/:versionId` | Conectadas |
 | Medidas, seguimientos y tareas | `GET/POST …/measures`, `POST …/measures/:id/update`, `GET/POST …/follow-ups`, `GET/POST …/tasks`, `POST …/tasks/:id/complete` | Conectadas |
 | Notificaciones | `GET /notifications`, `POST /notifications/:id/read` | Conectadas (campana y página) |
+| Establecimiento propio | `GET /me/establishments`, `GET /establishments/:id/stages`, `GET /establishments/:id/members` | Conectadas (selector de establecimiento, nombre de etapa, directorio de responsables) |
+| Cursos | `GET/POST /courses`, `PATCH /courses/:id` | Conectadas (Cursos) |
+| Estudiantes | `GET/POST /students`, `GET/PATCH /students/:id`, `GET /students/:id/cases`, `POST /students/:id/guardians`, `POST …/guardians/:guardianId/unlink`, `POST /students/import` | Conectadas (Estudiantes, ficha y carga masiva CSV) |
+| Apoderados | `GET/POST /guardians`, `GET/PATCH /guardians/:id` | Conectadas (Apoderados y ficha) |
+| Funcionarios | `GET/POST /staff`, `PATCH /staff/:id` | Conectadas (Funcionarios) |
+| Citaciones | `GET/POST /cases/:id/summons`, `POST …/summons/:id/update`, `GET /summons` | Conectadas (pestaña del expediente y listado global) |
+| Derivaciones | `GET/POST /cases/:id/referrals`, `POST …/referrals/:id/update`, `GET /referrals` | Conectadas (pestaña del expediente y listado global) |
 
-Resultado: 62 de 64 operaciones tienen pantalla; las 2 restantes están implementadas en la capa de servicios y esperan datos que la API todavía no entrega.
+Resultado: 91 de 93 operaciones tienen pantalla; las 2 restantes (`GET /roles/:id` y `PATCH …/stages/:stageId`) están en la capa de servicios y no se usan porque el listado ya trae lo necesario.
 
 ## Pantallas conectadas
 
-Panel de inicio, Casos (listado, creación, expediente con 11 pestañas), Denuncias, Medidas, Protocolos, Seguimientos, Tareas, Entrevistas, Calendario, Documentos, Reportes, Notificaciones, Usuarios (listado y ficha), Roles y permisos, Establecimientos, Auditoría y Configuración. El login y la recuperación de contraseña se integraron en la fase anterior.
+Panel de inicio, Casos (listado, creación, expediente con 13 pestañas), Denuncias, Medidas, Protocolos, Seguimientos, Tareas, Entrevistas, Citaciones, Derivaciones, Calendario, Documentos, Reportes, Notificaciones, Estudiantes (con ficha y carga masiva), Apoderados (con ficha), Funcionarios, Cursos, Usuarios (listado y ficha), Roles y permisos, Establecimientos, Auditoría y Configuración. El login y la recuperación de contraseña se integraron en la fase anterior.
 
 Las pantallas globales (denuncias, medidas, seguimientos, tareas, entrevistas, documentos, calendario y los indicadores del panel) se componen consultando los expedientes autorizados más recientes (hasta 300 para el listado y 60 para el contenido) y, de cada uno, su contenido. Cada vista indica cuántos expedientes revisó. Es una composición de endpoints reales y autorizados, no una estimación, pero no es un listado global del servidor.
 
-## Módulos sin API (pendientes)
+## Comunidad educativa
 
-Se conservan en el menú con la etiqueta "Pendiente" y una pantalla que explica qué falta; no muestran datos ni formularios simulados.
+El directorio (cursos, estudiantes, apoderados y funcionarios) es la fuente de las personas involucradas en un caso: en la pestaña Involucrados se elige a la persona con un buscador por nombre o RUT (`PersonPicker`) y el servidor reutiliza el involucrado si ya participó en otro expediente. Si la persona no está registrada, se sigue pudiendo escribir una referencia de texto libre. Estudiantes, apoderados y funcionarios exigen permisos de lectura propios; los datos personales no se guardan en el navegador ni viajan en la URL, y el RUT se valida con su dígito verificador (7 u 8 dígitos) antes de enviarse.
 
-| Módulo | Qué falta en el backend |
-| --- | --- |
-| Estudiantes, apoderados, funcionarios y cursos | Catálogos, búsqueda, matrícula y relación con expedientes. Hoy solo existe el "involucrado" del expediente, con un identificador de referencia de texto libre |
-| Citaciones | Endpoints de citaciones (crear, enviar, confirmar, asistencia) y generación de documentos en el servidor |
-| Derivaciones | Endpoints de derivaciones e instituciones receptoras |
+La **carga masiva** lee un CSV en el navegador (separador `;` o `,`, columnas RUT, Nombres, Apellidos, Fecha de nacimiento y Curso), revisa cada fila y solo envía el archivo si no tiene errores; el servidor vuelve a validar y es "todo o nada".
 
 ## Necesidades de backend
 
-Detectadas al integrar; ninguna se modificó en el backend.
+Resueltas con el módulo de comunidad educativa (2026-10-23):
 
-1. **Listar etapas** (`GET /establishments/:id/stages`). Sin él no se puede mostrar el nombre de la etapa de un expediente ni ofrecer el cambio de etapa (`PATCH /cases/:id` con `currentStageId` y `POST …/transition` con `stageId` ya están soportados en `services/cases.ts`). Hoy la ficha muestra "Etapa asignada" sin nombre.
-2. **Establecimientos del usuario**. `GET /establishments` exige `institutions.read`, que en la matriz inicial solo tiene SYSTEM_ADMIN. Un encargado de convivencia no puede conocer el identificador del establecimiento para crear su primer expediente ni administrar protocolos. La interfaz lo deduce de los expedientes ya autorizados; con ninguno, no hay forma. Se necesita un `GET /me/establishments` (o equivalente).
-3. **Directorio de personas por establecimiento**. `GET /users` exige `users.read`. Sin él no se resuelven los nombres de responsables, entrevistadores ni autores (se muestra "Usted" o un identificador corto) y la asignación pide pegar un UUID.
-4. **Permisos efectivos en `GET /auth/me`**. Solo entrega roles. El menú y los botones usan la matriz inicial del seed como indicio; si se altera la matriz en la base, la interfaz puede mostrar u ocultar de más (el servidor siempre decide con 403).
-5. **Estado de invitación en el usuario**. `isActive: false` no distingue "desactivada" de "invitación pendiente". La ficha ofrece las dos acciones y muestra el 409 del servidor si no corresponde.
-6. **Listados de involucrados, accesos concedidos, borradores de protocolo y protocolos aplicados**. No existen: no se pueden reutilizar involucrados de otros casos, ver quién tiene acceso a un expediente, recuperar un borrador de protocolo sin publicar ni listar aplicaciones (se deducen de la línea de tiempo).
-7. **Búsqueda por texto en `GET /cases`**. Hoy la búsqueda y los filtros por categoría y responsable se hacen en el navegador sobre hasta 300 expedientes.
-8. **Listados globales y estadísticas** (tareas, medidas, seguimientos, denuncias, documentos, indicadores del panel): permitirían reemplazar la composición por expediente y evitar muchas llamadas.
-9. **Catálogos**: categoría, prioridad, canal, clasificación, modalidad y participación son texto libre en la API. La interfaz usa una convención (ver abajo); el establecimiento debe definir los catálogos oficiales.
-10. **Entrevistas "programadas"**. El modelo solo guarda entrevistas ya realizadas (borrador o finalizada); no hay agenda ni asistentes. La interfaz informa entrevistas en borrador, no programadas.
-11. **Documentos por entrevista**. Los documentos pertenecen al expediente; no existe el vínculo documento-entrevista.
+- **Listar etapas**: `GET /establishments/:id/stages` (la ficha del expediente muestra el nombre de la etapa y se puede cambiar).
+- **Establecimientos del usuario**: `GET /me/establishments` (un encargado de convivencia ya conoce su establecimiento sin `institutions.read`).
+- **Directorio de personas por establecimiento**: `GET /establishments/:id/members` (nombres de responsables, entrevistadores y autores; la asignación ya no pide pegar un UUID).
+- **Módulos de comunidad, citaciones y derivaciones**: ver [community-contract.md](../api/community-contract.md).
+
+Siguen pendientes en el backend:
+
+1. **Permisos efectivos en `GET /auth/me`**. Solo entrega roles. El menú y los botones usan la matriz inicial del seed como indicio; si se altera la matriz en la base, la interfaz puede mostrar u ocultar de más (el servidor siempre decide con 403).
+2. **Estado de invitación en el usuario**. `isActive: false` no distingue "desactivada" de "invitación pendiente". La ficha ofrece las dos acciones y muestra el 409 del servidor si no corresponde.
+3. **Listados de accesos concedidos, borradores de protocolo y protocolos aplicados**. No existen: no se puede ver quién tiene acceso a un expediente, recuperar un borrador de protocolo sin publicar ni listar aplicaciones (se deducen de la línea de tiempo).
+4. **Búsqueda por texto en `GET /cases`**. Hoy la búsqueda y los filtros por categoría y responsable se hacen en el navegador sobre hasta 300 expedientes.
+5. **Listados globales y estadísticas** (tareas, medidas, seguimientos, denuncias, documentos, indicadores del panel): permitirían reemplazar la composición por expediente y evitar muchas llamadas. Citaciones y derivaciones ya tienen listado global.
+6. **Catálogos**: categoría, prioridad, canal, clasificación, modalidad, participación, vínculo familiar y tipo de institución de derivación son texto libre en la API. La interfaz usa una convención (ver abajo); el establecimiento debe definir los catálogos oficiales.
+7. **Entrevistas "programadas"**. El modelo solo guarda entrevistas ya realizadas (borrador o finalizada); no hay agenda ni asistentes. La interfaz informa entrevistas en borrador, no programadas.
+8. **Documentos por entrevista**. Los documentos pertenecen al expediente; no existe el vínculo documento-entrevista.
+9. **Generación de cartas de citación y notificación a apoderados**. La citación se registra y se sigue, pero el servidor no genera el documento ni envía correos.
 
 ## Problemas del backend
 
@@ -62,7 +70,7 @@ Detectadas al integrar; ninguna se modificó en el backend.
 
 ## Convenciones de la interfaz
 
-- **Códigos de catálogo** (`lib/catalogs.ts`): categorías (`CONVIVENCIA`, `ACOSO`, `CIBERACOSO`, `VIOLENCIA`, `DISCRIMINACION`, `VULNERACION`, `OTRO`), prioridades (`BAJA`, `MEDIA`, `ALTA`, `CRITICA`), canales (`DIRECTO`, `CORREO`, `TELEFONO`, `BUZON`, `OTRO`), clasificaciones (`SIN_CLASIFICAR`, `LEVE`, `GRAVE`, `GRAVISIMA`), modalidades (`PRESENCIAL`, `VIDEOLLAMADA`, `TELEFONICA`) y participaciones (`AFECTADO`, `DENUNCIANTE`, `IMPLICADO`, `TESTIGO`, `OTRO`). Cualquier otro código recibido se muestra tal cual.
+- **Códigos de catálogo** (`lib/catalogs.ts`): categorías (`CONVIVENCIA`, `ACOSO`, `CIBERACOSO`, `VIOLENCIA`, `DISCRIMINACION`, `VULNERACION`, `OTRO`), prioridades (`BAJA`, `MEDIA`, `ALTA`, `CRITICA`), canales (`DIRECTO`, `CORREO`, `TELEFONO`, `BUZON`, `OTRO`), clasificaciones (`SIN_CLASIFICAR`, `LEVE`, `GRAVE`, `GRAVISIMA`), modalidades (`PRESENCIAL`, `VIDEOLLAMADA`, `TELEFONICA`) participaciones (`AFECTADO`, `DENUNCIANTE`, `IMPLICADO`, `TESTIGO`, `OTRO`), vínculos familiares (`MADRE`, `PADRE`, `TUTOR_LEGAL`, `ABUELO_A`, `HERMANO_A`, `OTRO`) y tipos de derivación (`SALUD`, `OPD`, `TRIBUNAL_FAMILIA`, `FISCALIA`, `SERVICIO_LOCAL`, `SUPERINTENDENCIA`, `OTRO`). Cualquier otro código recibido se muestra tal cual.
 - **Folio**: el backend guarda un entero por establecimiento; se muestra como `EXP-0001`.
 - **Contenido de protocolos**: JSON libre; la interfaz guarda `{ "descripcion": "…", "etapas": ["…"] }` y muestra cualquier otra estructura como JSON.
 - **Versiones**: toda edición envía `expectedVersion`. Un 409 muestra el motivo del servidor y "Recargar datos"; nunca se reintenta una escritura automáticamente.
@@ -71,6 +79,6 @@ Detectadas al integrar; ninguna se modificó en el backend.
 
 ## Previsualización con API simulada
 
-`pnpm --filter @backoffice/web dev:preview` levanta la interfaz con `src/preview/fakeApi.ts`, un adaptador de Axios en memoria que replica el contrato (CSRF, versiones, 409, 403, 404, máquina de estados, límite de 100 KB). Sirve para revisar el diseño y probar flujos sin credenciales y sin tocar la base local. Los datos son sintéticos y rotulados, no existen cuentas ni contraseñas (el inicio de sesión real no está disponible; la sesión es sintética) y `window.__fakeApi` permite provocar situaciones como un cambio concurrente. `__UI_PREVIEW__` es el literal `false` en `vite build`: se verificó que `dist/` no contiene el simulador ni sus datos.
+`pnpm --filter @backoffice/web dev:preview` levanta la interfaz con `src/preview/fakeApi.ts`, un adaptador de Axios en memoria que replica el contrato (CSRF, versiones, 409, 403, 404, máquina de estados, límite de 100 KB, comunidad, citaciones y derivaciones). Sirve para revisar el diseño y probar flujos sin credenciales y sin tocar la base local. Los datos son sintéticos y rotulados, no existen cuentas ni contraseñas (el inicio de sesión real no está disponible; la sesión es sintética) y `window.__fakeApi` permite provocar situaciones como un cambio concurrente. `__UI_PREVIEW__` es el literal `false` en `vite build`: se verificó que `dist/` no contiene el simulador ni sus datos.
 
 Las mismas reglas se prueban automáticamente en `tests/api-flows.spec.ts` contra ese simulador. Esas pruebas validan la lógica del frontend, **no** el comportamiento del backend real.

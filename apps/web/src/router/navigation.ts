@@ -21,10 +21,10 @@ export const NAVIGATION: NavGroup[] = [
   {
     label: 'Comunidad educativa',
     items: [
-      { label: 'Estudiantes', to: '/estudiantes', icon: 'student', pending: true },
-      { label: 'Apoderados', to: '/apoderados', icon: 'users', pending: true },
-      { label: 'Funcionarios', to: '/funcionarios', icon: 'briefcase', pending: true },
-      { label: 'Cursos', to: '/cursos', icon: 'book', pending: true }
+      { label: 'Estudiantes', to: '/estudiantes', icon: 'student', permission: 'students.read' },
+      { label: 'Apoderados', to: '/apoderados', icon: 'users', permission: 'guardians.read' },
+      { label: 'Funcionarios', to: '/funcionarios', icon: 'briefcase', permission: 'staff.read' },
+      { label: 'Cursos', to: '/cursos', icon: 'book', permission: 'courses.read' }
     ]
   },
   {
@@ -32,9 +32,9 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { label: 'Tareas', to: '/tareas', icon: 'check-square', permission: 'tasks.read' },
       { label: 'Entrevistas', to: '/entrevistas', icon: 'message', permission: 'interviews.read' },
-      { label: 'Citaciones', to: '/citaciones', icon: 'mail', pending: true },
+      { label: 'Citaciones', to: '/citaciones', icon: 'mail', permission: 'summons.read' },
       { label: 'Calendario', to: '/calendario', icon: 'calendar', permission: 'cases.read' },
-      { label: 'Derivaciones', to: '/derivaciones', icon: 'referral', pending: true },
+      { label: 'Derivaciones', to: '/derivaciones', icon: 'referral', permission: 'referrals.read' },
       { label: 'Documentos', to: '/documentos', icon: 'file', permission: 'documents.read' }
     ]
   },

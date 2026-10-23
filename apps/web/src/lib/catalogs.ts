@@ -35,6 +35,16 @@ export const PARTICIPANT_KIND_OPTIONS: { value: ParticipantKind; label: string }
 ];
 export const participantKindLabel = (kind: string) => PARTICIPANT_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind;
 
+export const RELATIONSHIP_OPTIONS = make([['MADRE', 'Madre'], ['PADRE', 'Padre'], ['TUTOR_LEGAL', 'Tutor/a legal'], ['ABUELO_A', 'Abuelo/a'], ['HERMANO_A', 'Hermano/a'], ['OTRO', 'Otro vínculo']]);
+export const relationshipLabel = labelFrom(RELATIONSHIP_OPTIONS);
+
+/** Instituciones de la red a las que se deriva. Convención del frontend: la API guarda el código como texto libre. */
+export const REFERRAL_TYPE_OPTIONS = make([
+  ['SALUD', 'Salud (CESFAM, hospital)'], ['OPD', 'Oficina de Protección de Derechos'], ['TRIBUNAL_FAMILIA', 'Tribunal de Familia'], ['FISCALIA', 'Fiscalía'],
+  ['SERVICIO_LOCAL', 'Servicio Local de Educación'], ['SUPERINTENDENCIA', 'Superintendencia de Educación'], ['OTRO', 'Otra institución']
+]);
+export const referralTypeLabel = labelFrom(REFERRAL_TYPE_OPTIONS);
+
 /** Transiciones permitidas por la máquina de estados (docs/architecture/case-state-machine.md). El servidor las valida. */
 export const TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
   ABIERTO: ['EN_EVALUACION', 'PAUSADO'],
@@ -68,7 +78,8 @@ export const EVENT_LABELS: Record<CaseEventType, string> = {
   PARTICIPANT_LINKED: 'Involucrado asociado', PARTICIPANT_UNLINKED: 'Involucrado desvinculado', INTERVIEW_CREATED: 'Entrevista registrada',
   INTERVIEW_FINALIZED: 'Entrevista finalizada', INTERVIEW_CORRECTED: 'Entrevista reabierta para corrección', DOCUMENT_UPLOADED: 'Documento cargado',
   PROTOCOL_APPLIED: 'Protocolo aplicado', MEASURE_CREATED: 'Medida registrada', MEASURE_UPDATED: 'Medida actualizada', FOLLOW_UP_CREATED: 'Seguimiento registrado',
-  TASK_CREATED: 'Tarea creada', TASK_COMPLETED: 'Tarea completada', NOTIFICATION_CREATED: 'Notificación emitida'
+  TASK_CREATED: 'Tarea creada', TASK_COMPLETED: 'Tarea completada', NOTIFICATION_CREATED: 'Notificación emitida', SUMMONS_CREATED: 'Citación registrada',
+  SUMMONS_UPDATED: 'Citación actualizada', REFERRAL_CREATED: 'Derivación registrada', REFERRAL_UPDATED: 'Derivación actualizada'
 };
 export const eventLabel = (type: string) => EVENT_LABELS[type as CaseEventType] ?? type.replace(/_/g, ' ').toLowerCase();
 

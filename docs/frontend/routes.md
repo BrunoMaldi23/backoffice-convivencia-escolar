@@ -21,7 +21,7 @@ Todas las vistas se cargan de forma diferida. "Pública" significa que no exige 
 | `/` | Panel de inicio | — |
 | `/casos` | Listado de casos (`?estado=`, `?prioridad=`) | `cases.read` |
 | `/casos/nuevo` | Nuevo caso (con denuncia opcional) | `cases.create` |
-| `/casos/:id` | Expediente. `?tab=`: `resumen`, `linea`, `denuncias`, `involucrados`, `entrevistas`, `documentos`, `protocolos`, `medidas`, `seguimientos`, `tareas`, `acceso` | `cases.read` |
+| `/casos/:id` | Expediente. `?tab=`: `resumen`, `linea`, `denuncias`, `involucrados`, `entrevistas`, `documentos`, `protocolos`, `medidas`, `seguimientos`, `tareas`, `citaciones`, `derivaciones`, `acceso` | `cases.read` |
 | `/denuncias`, `/denuncias/nueva` | Denuncias recibidas y registro de una denuncia (crea el expediente) | `reports.read`, `reports.create` |
 | `/medidas` | Medidas de resguardo | `measures.read` |
 | `/protocolos` | Catálogo de protocolos | `protocols.read` |
@@ -32,7 +32,12 @@ Todas las vistas se cargan de forma diferida. "Pública" significa que no exige 
 | `/documentos` | Documentos y evidencias | `documents.read` |
 | `/reportes` | Reportes | `cases.read` |
 | `/notificaciones` | Notificaciones | `notifications.read` |
-| `/estudiantes`, `/apoderados`, `/funcionarios`, `/cursos`, `/citaciones`, `/derivaciones` | Módulos pendientes de backend | — |
+| `/estudiantes`, `/estudiantes/:id` | Estudiantes (búsqueda, carga masiva CSV) y ficha con apoderados y expedientes | `students.read` |
+| `/apoderados`, `/apoderados/:id` | Apoderados y ficha con sus estudiantes | `guardians.read` |
+| `/funcionarios` | Funcionarios del establecimiento | `staff.read` |
+| `/cursos` | Cursos por año académico | `courses.read` |
+| `/citaciones` | Citaciones de los expedientes visibles | `summons.read` |
+| `/derivaciones` | Derivaciones de los expedientes visibles | `referrals.read` |
 | `/administracion/usuarios`, `/administracion/usuarios/:id` | Usuarios y ficha | `users.read` |
 | `/administracion/roles` (`?rol=`) | Roles y permisos | `roles.read` |
 | `/administracion/establecimientos` | Establecimientos, membresías y etapas | `institutions.read` |

@@ -23,6 +23,13 @@ const STATUSES: Record<string, Def> = {
   PENDIENTE: { label: 'Pendiente', tone: 'warning' },
   COMPLETADA: { label: 'Completada', tone: 'success' },
   CANCELADA: { label: 'Cancelada', tone: 'neutral' },
+  // Citaciones y derivaciones
+  PROGRAMADA: { label: 'Programada', tone: 'info' },
+  REALIZADA: { label: 'Realizada', tone: 'success' },
+  NO_ASISTIO: { label: 'No asistió', tone: 'danger' },
+  ENVIADA: { label: 'Enviada', tone: 'progress' },
+  CON_RESPUESTA: { label: 'Con respuesta', tone: 'success' },
+  CERRADA: { label: 'Cerrada', tone: 'neutral' },
   // Protocolos
   PUBLICADO: { label: 'Publicado', tone: 'success' },
   RETIRADO: { label: 'Retirado', tone: 'neutral' },

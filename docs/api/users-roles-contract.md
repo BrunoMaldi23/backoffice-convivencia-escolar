@@ -24,4 +24,4 @@ Permisos: `dashboard.read`, `users.read`, `users.create`, `users.update`, `users
 
 Errores: 400 DTO/UUID, 401 sin sesión, 403 permiso/CSRF, 404 recurso, 409 correo duplicado o protección administrativa, 429 rate limit, 503 fallo SMTP al invitar. Si el correo falla después de crear una cuenta, use `resend-invitation` cuando Mailpit vuelva a estar disponible.
 
-Inicialización idempotente: `docker compose exec -T api pnpm --filter @backoffice/api roles:seed`. Usa marcador `system_control.rbac_seed_v1`; ejecuciones posteriores no alteran asignaciones institucionales.
+Inicialización idempotente: `docker compose exec -T api pnpm --filter @backoffice/api roles:seed`. Usa marcador `system_control.rbac_seed_v1`; ejecuciones posteriores no alteran asignaciones institucionales. La versión vigente de la matriz es `rbac_seed_v4` (agrega permisos de comunidad educativa, citaciones y derivaciones sin quitar los existentes).

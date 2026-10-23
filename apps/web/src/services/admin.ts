@@ -1,4 +1,4 @@
-import type { AdminUser, AuditEntry, Establishment, CaseStage, Membership, CaseAccessGrant, CaseAccessLevel, Page, Permission, Role, Uuid } from '@/types/api';
+import type { AdminUser, AuditEntry, Establishment, EstablishmentMember, CaseStage, Membership, CaseAccessGrant, CaseAccessLevel, Page, Permission, Role, Uuid } from '@/types/api';
 import { api } from './api';
 
 /** Usuarios, roles, auditoría e instituciones: docs/api/users-roles-contract.md, audit-contract.md y backend-contracts.md. */
@@ -31,3 +31,8 @@ export const createStage = async (establishmentId: Uuid, input: { code: string; 
 export const updateStage = async (establishmentId: Uuid, stageId: Uuid, input: { name?: string; displayOrder?: number; isActive?: boolean }): Promise<CaseStage> => (await api.patch<CaseStage>(`/establishments/${establishmentId}/stages/${stageId}`, input)).data;
 export const grantCaseAccess = async (caseId: Uuid, input: { userId: Uuid; accessLevel: CaseAccessLevel; expiresAt?: string; reason?: string }): Promise<CaseAccessGrant> => (await api.post<CaseAccessGrant>(`/cases/${caseId}/access-grants`, input)).data;
 export const revokeCaseAccess = async (caseId: Uuid, userId: Uuid): Promise<CaseAccessGrant> => (await api.post<CaseAccessGrant>(`/cases/${caseId}/access-grants/${userId}/revoke`, {})).data;
+
+/** Lecturas que no exigen permisos administrativos: solo pertenecer al establecimiento. */
+export const listMyEstablishments = async (): Promise<Establishment[]> => (await api.get<Establishment[]>('/me/establishments')).data;
+export const listStages = async (establishmentId: Uuid): Promise<CaseStage[]> => (await api.get<CaseStage[]>(`/establishments/${establishmentId}/stages`)).data;
+export const listMembers = async (establishmentId: Uuid): Promise<EstablishmentMember[]> => (await api.get<EstablishmentMember[]>(`/establishments/${establishmentId}/members`)).data;

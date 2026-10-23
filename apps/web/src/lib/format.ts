@@ -60,3 +60,28 @@ export function isoToDate(value: string | null | undefined): Date | null {
 
 /** Plazo vencido: la fecha ya pasó (compara contra `now`). */
 export const isOverdue = (value: string | null | undefined, now = new Date()) => Boolean(value) && new Date(value as string).getTime() < now.getTime();
+
+/** Nombre completo de una persona del directorio. */
+export const fullName = (person: { firstNames: string; lastNames: string }) => `${person.firstNames} ${person.lastNames}`.trim();
+
+/**
+ * Fechas de calendario sin hora (por ejemplo, el nacimiento): la API las entrega a medianoche UTC, por lo que se leen en UTC
+ * para que no retrocedan un día al mostrarse en hora de Chile.
+ */
+const calendarParts = new Intl.DateTimeFormat('es-CL', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' });
+export function formatCalendarDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const parts = Object.fromEntries(calendarParts.formatToParts(date).map((p) => [p.type, p.value]));
+  return `${parts.day}-${parts.month}-${parts.year}`;
+}
+/** `aaaa-mm-dd` (o ISO de la API) a `Date` local para un `DatePicker`. */
+export function calendarToDate(value: string | null | undefined): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value ?? '');
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12) : null;
+}
+/** `Date` local elegido en un `DatePicker` a `aaaa-mm-dd`. */
+export function dateToCalendar(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}

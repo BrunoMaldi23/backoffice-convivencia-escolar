@@ -23,9 +23,10 @@ export const useCreateReport = (caseId: string) => useApiMutation((input: Report
 export const useUpdateReport = (caseId: string) => useApiMutation((input: { id: string } & UpdateReportInput) => { const { id, ...body } = input; return cases.updateReport(caseId, id, body); }, () => caseScope(caseId));
 
 export const useCreateParticipant = (caseId: string) => useApiMutation(
-  async (input: { establishmentId: string; kind: ParticipantKind; referenceLabel: string; participationCode: string }) => {
-    const participant = await cases.createParticipant({ establishmentId: input.establishmentId, kind: input.kind, referenceLabel: input.referenceLabel });
-    return cases.linkParticipant(caseId, { participantId: participant.id, participationCode: input.participationCode });
+  async (input: { establishmentId: string; kind: ParticipantKind; referenceLabel?: string; studentId?: string; guardianId?: string; staffMemberId?: string; participationCode: string }) => {
+    const { participationCode, ...person } = input;
+    const participant = await cases.createParticipant(person);
+    return cases.linkParticipant(caseId, { participantId: participant.id, participationCode });
   }, () => caseScope(caseId));
 export const useLinkParticipant = (caseId: string) => useApiMutation((input: { participantId: string; participationCode: string }) => cases.linkParticipant(caseId, input), () => caseScope(caseId));
 export const useUnlinkParticipant = (caseId: string) => useApiMutation((linkId: string) => cases.unlinkParticipant(caseId, linkId), () => caseScope(caseId));

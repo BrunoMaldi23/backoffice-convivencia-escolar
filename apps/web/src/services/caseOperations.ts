@@ -1,6 +1,6 @@
 import type {
-  AppNotification, CaseDocument, CaseFollowUp, CaseMeasure, CaseTask, DocumentKind, FollowUpInput, MeasureInput, MeasureStatus, ProtocolApplication, ProtocolTemplate,
-  ProtocolVersion, TaskInput, Uuid
+  AppNotification, CaseDocument, CaseFollowUp, CaseMeasure, CaseReferral, CaseSummons, CaseTask, DocumentKind, FollowUpInput, MeasureInput, MeasureStatus, Page, ProtocolApplication,
+  ProtocolTemplate, ProtocolVersion, ReferralInput, ReferralStatus, SummonsInput, SummonsStatus, TaskInput, UpdateReferralInput, UpdateSummonsInput, Uuid
 } from '@/types/api';
 import { api } from './api';
 
@@ -48,3 +48,15 @@ export const completeTask = async (caseId: Uuid, id: Uuid): Promise<CaseTask> =>
 
 export const listNotifications = async (): Promise<AppNotification[]> => (await api.get<AppNotification[]>('/notifications')).data;
 export const markNotificationRead = async (id: Uuid): Promise<AppNotification> => (await api.post<AppNotification>(`/notifications/${id}/read`, {})).data;
+
+/** Citaciones y derivaciones (docs/api/community-contract.md). Los listados globales solo incluyen expedientes visibles para la persona. */
+export interface ActionListQuery<S> { establishmentId?: Uuid; status?: S; page?: number; limit?: number }
+export const listCaseSummons = async (caseId: Uuid): Promise<CaseSummons[]> => (await api.get<CaseSummons[]>(`/cases/${caseId}/summons`)).data;
+export const createSummons = async (caseId: Uuid, input: SummonsInput): Promise<CaseSummons> => (await api.post<CaseSummons>(`/cases/${caseId}/summons`, input)).data;
+export const updateSummons = async (caseId: Uuid, id: Uuid, input: UpdateSummonsInput): Promise<CaseSummons> => (await api.post<CaseSummons>(`/cases/${caseId}/summons/${id}/update`, input)).data;
+export const listSummons = async (query: ActionListQuery<SummonsStatus> & { from?: string; to?: string } = {}): Promise<Page<CaseSummons>> => (await api.get<Page<CaseSummons>>('/summons', { params: { page: 1, limit: 25, ...query } })).data;
+
+export const listCaseReferrals = async (caseId: Uuid): Promise<CaseReferral[]> => (await api.get<CaseReferral[]>(`/cases/${caseId}/referrals`)).data;
+export const createReferral = async (caseId: Uuid, input: ReferralInput): Promise<CaseReferral> => (await api.post<CaseReferral>(`/cases/${caseId}/referrals`, input)).data;
+export const updateReferral = async (caseId: Uuid, id: Uuid, input: UpdateReferralInput): Promise<CaseReferral> => (await api.post<CaseReferral>(`/cases/${caseId}/referrals/${id}/update`, input)).data;
+export const listReferrals = async (query: ActionListQuery<ReferralStatus> = {}): Promise<Page<CaseReferral>> => (await api.get<Page<CaseReferral>>('/referrals', { params: { page: 1, limit: 25, ...query } })).data;

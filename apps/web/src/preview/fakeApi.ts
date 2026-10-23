@@ -9,11 +9,13 @@
  */
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import type {
-  AdminUser, AppNotification, AuditEntry, CaseDocument, CaseEvent, CaseEventType, CaseFollowUp, CaseMeasure, CaseParticipantLink, CaseRecord, CaseReport, CaseStage, CaseStatus,
-  CaseTask, Establishment, Interview, Participant, Permission, ProtocolTemplate, ProtocolVersion, Role
+  AdminUser, AppNotification, AuditEntry, CaseDocument, CaseEvent, CaseEventType, CaseFollowUp, CaseMeasure, CaseParticipantLink, CaseRecord, CaseReferral, CaseReport, CaseStage,
+  CaseStatus, CaseSummons, CaseTask, Course, Establishment, Guardian, Interview, Participant, Permission, ProtocolTemplate, ProtocolVersion, ReferralStatus, Role, StaffMember, Student,
+  SummonsStatus
 } from '@/types/api';
 import { CASE_STATUSES } from '@/types/api';
 import { ROLE_PERMISSION_HINTS } from '@/lib/access';
+import { cleanRut, isValidRut, rutCheckDigit } from '@/lib/rut';
 
 const TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
   ABIERTO: ['EN_EVALUACION', 'PAUSADO'], EN_EVALUACION: ['EN_PROCESO', 'PAUSADO', 'RESUELTO'], EN_PROCESO: ['PAUSADO', 'RESUELTO'],
@@ -40,6 +42,8 @@ export interface FakeDb {
   cases: CaseRecord[]; events: CaseEvent[]; reports: CaseReport[]; participants: Participant[]; links: CaseParticipantLink[]; interviews: Interview[];
   documents: (CaseDocument & { caseId: string; bytes: Uint8Array })[]; protocols: ProtocolTemplate[]; applications: { id: string; caseId: string; protocolVersionId: string }[];
   measures: CaseMeasure[]; followUps: CaseFollowUp[]; tasks: CaseTask[]; notifications: AppNotification[]; caseSequence: number;
+  courses: Course[]; students: Student[]; guardians: Guardian[]; studentGuardians: { studentId: string; guardianId: string; relationship: string; isPrimary: boolean; createdAt: string }[];
+  staff: StaffMember[]; summons: CaseSummons[]; referrals: CaseReferral[];
 }
 
 const ago = (days: number, hours = 0) => new Date(Date.now() - days * 86_400_000 - hours * 3_600_000).toISOString();
@@ -113,8 +117,31 @@ export function seedFakeDb(): FakeDb {
     { id: uuid(), actorUserId: null, action: 'AUTH_LOGIN_FAILED', targetType: 'SESSION', targetId: null, metadata: { result: 'FAILURE' }, createdAt: ago(2) },
     { id: uuid(), actorUserId: PREVIEW_ME_ID, action: 'CASE_CREATED', targetType: 'CASE', targetId: first, metadata: { result: 'SUCCESS' }, createdAt: ago(3) }
   ];
+  // Comunidad educativa sintética: RUT válidos de ejemplo y nombres marcadores.
+  const demoRut = (body: number) => `${body}-${rutCheckDigit(String(body))}`;
+  const now = ago(30);
+  const courses: Course[] = ['1° Básico A', '2° Básico B', '7° Básico A'].map((name, index) => ({ id: `70000000-0000-4000-8000-00000000000${index + 1}`, establishmentId, name, level: index < 2 ? 'Básica' : 'Básica', academicYear: new Date().getFullYear(), isActive: true, version: 1, createdAt: now, updatedAt: now }));
+  const students: Student[] = Array.from({ length: 8 }, (_, index) => ({
+    id: `71000000-0000-4000-8000-0000000000${String(index + 1).padStart(2, '0')}`, establishmentId, rut: demoRut(24000001 + index), firstNames: `Estudiante demo ${String(index + 1).padStart(2, '0')}`, lastNames: ['Apellido Uno', 'Apellido Dos', 'Apellido Tres', 'Apellido Cuatro'][index % 4]!,
+    birthDate: `${2012 + (index % 4)}-0${(index % 9) + 1}-1${index % 9}T00:00:00.000Z`, courseId: courses[index % courses.length]!.id, isActive: index !== 7, version: 1, createdAt: now, updatedAt: now, course: null
+  }));
+  const guardians: Guardian[] = Array.from({ length: 4 }, (_, index) => ({
+    id: `72000000-0000-4000-8000-0000000000${String(index + 1).padStart(2, '0')}`, establishmentId, rut: index === 3 ? null : demoRut(12000001 + index), firstNames: `Apoderado demo ${String(index + 1).padStart(2, '0')}`, lastNames: `Apellido ${['Uno', 'Dos', 'Tres', 'Cuatro'][index]}`,
+    email: `apoderado${index + 1}@demo.invalid`, phone: `+56 9 0000 000${index}`, isActive: true, version: 1, createdAt: now, updatedAt: now
+  }));
+  const studentGuardians = students.slice(0, 6).map((student, index) => ({ studentId: student.id, guardianId: guardians[index % 3]!.id, relationship: index % 2 ? 'PADRE' : 'MADRE', isPrimary: true, createdAt: now }));
+  const staff: StaffMember[] = [
+    { id: '73000000-0000-4000-8000-000000000001', establishmentId, rut: demoRut(9000001), firstNames: 'Funcionario demo 01', lastNames: 'Apellido Uno', position: 'Inspector general', email: null, phone: null, userId: users[4]!.id, isActive: true, version: 1, createdAt: now, updatedAt: now, user: null },
+    { id: '73000000-0000-4000-8000-000000000002', establishmentId, rut: null, firstNames: 'Funcionario demo 02', lastNames: 'Apellido Dos', position: 'Docente jefe', email: null, phone: null, userId: null, isActive: true, version: 1, createdAt: now, updatedAt: now, user: null }
+  ];
+  participants[0]!.studentId = students[0]!.id; participants[1]!.guardianId = guardians[0]!.id;
+  const summons: CaseSummons[] = [
+    { id: uuid(), caseId: first, participantId: participants[1]!.id, recipientLabel: participants[1]!.referenceLabel, scheduledAt: ahead(3), location: 'Oficina de convivencia', reason: 'Conversar sobre los acuerdos del caso (ejemplo).', status: 'PROGRAMADA', outcomeNote: null, createdByUserId: PREVIEW_ME_ID, version: 1, createdAt: ago(2), updatedAt: ago(2) },
+    { id: uuid(), caseId: first, participantId: null, recipientLabel: 'Profesor jefe del curso', scheduledAt: ago(9), location: 'Sala de reuniones', reason: 'Coordinar apoyos (ejemplo).', status: 'REALIZADA', outcomeNote: 'Se acordó seguimiento semanal.', createdByUserId: PREVIEW_ME_ID, version: 2, createdAt: ago(12), updatedAt: ago(9) }
+  ];
+  const referrals: CaseReferral[] = [{ id: uuid(), caseId: first, typeCode: 'SALUD', institutionName: 'CESFAM de ejemplo', reason: 'Evaluación psicológica (ejemplo).', status: 'ENVIADA', contactName: null, sentAt: ago(5), responseNote: null, responseAt: null, closedAt: null, createdByUserId: PREVIEW_ME_ID, version: 2, createdAt: ago(7), updatedAt: ago(5) }];
   const establishments: Establishment[] = [{ id: establishmentId, code: 'PREVIEW', name: 'Establecimiento de previsualización', institutionalIdentifier: null, isActive: true, createdAt: ago(100), updatedAt: ago(100) }];
-  return { me: users[0]!, loggedOut: false, users, roles, permissions, audit, establishments, stages, cases, events, reports, participants, links, interviews, documents, protocols, applications: [], measures, followUps, tasks, notifications, caseSequence: cases.length + 1 };
+  return { me: users[0]!, loggedOut: false, users, roles, permissions, audit, establishments, stages, cases, events, reports, participants, links, interviews, documents, protocols, applications: [], measures, followUps, tasks, notifications, caseSequence: cases.length + 1, courses, students, guardians, studentGuardians, staff, summons, referrals };
 }
 
 
@@ -287,7 +314,13 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   });
   on('POST', '/participants', (req) => {
     require('participants.manage'); const b = body(req); if (!db.establishments.some((e) => e.id === b.establishmentId)) fail(404, 'Establecimiento no disponible');
-    const created: Participant = { id: uuid(), establishmentId: String(b.establishmentId), kind: b.kind as Participant['kind'], referenceLabel: str(b.referenceLabel, 'referenceLabel', 2, 160), isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const ids = [b.studentId, b.guardianId, b.staffMemberId].filter(Boolean); if (ids.length > 1) fail(400, 'Indique una sola persona del directorio');
+    const person = (b.studentId ? { kind: 'ESTUDIANTE', field: 'studentId', record: db.students.find((x) => x.id === b.studentId && x.isActive) } : b.guardianId ? { kind: 'APODERADO', field: 'guardianId', record: db.guardians.find((x) => x.id === b.guardianId && x.isActive) } : b.staffMemberId ? { kind: 'FUNCIONARIO', field: 'staffMemberId', record: db.staff.find((x) => x.id === b.staffMemberId && x.isActive) } : null);
+    if (person && person.kind !== b.kind) fail(400, 'El tipo de involucrado no corresponde a la persona elegida');
+    if (person && !person.record) fail(404, 'Persona no disponible');
+    if (person) { const existing = db.participants.find((p) => p.isActive && (p as unknown as Record<string, unknown>)[person.field] === person.record!.id); if (existing) return { status: 201, data: existing }; }
+    const label = optStr(b.referenceLabel) ?? (person ? `${person.record!.firstNames} ${person.record!.lastNames}` : undefined); if (!label) fail(400, 'Indique una referencia o elija una persona del directorio');
+    const created: Participant = { id: uuid(), establishmentId: String(b.establishmentId), kind: b.kind as Participant['kind'], referenceLabel: label!, ...(person ? { [person.field]: person.record!.id } : {}), isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     db.participants.push(created); return { status: 201, data: created };
   });
   on('GET', '/cases/:id/participants', (_r, [id]) => { require('participants.read'); findCase(id); return { status: 200, data: db.links.filter((l) => l.caseId === id && !l.unlinkedAt) }; });
@@ -388,6 +421,208 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('GET', '/notifications', () => { require('notifications.read'); return { status: 200, data: [...db.notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }; });
   on('POST', '/notifications/:nid/read', (_r, [nid]) => {
     require('notifications.read'); const n = db.notifications.find((x) => x.id === nid && !x.readAt) ?? fail(404, 'Notificación no disponible'); n.readAt = new Date().toISOString(); return { status: 201, data: n };
+  });
+
+
+  // ── Establecimientos del usuario, etapas y personas con cuenta ──
+  const memberOf = (id: string) => db.establishments.some((e) => e.id === id && e.isActive) || fail(404, 'Establecimiento no disponible');
+  on('GET', '/me/establishments', () => ({ status: 200, data: db.establishments.filter((e) => e.isActive) }));
+  on('GET', '/establishments/:id/stages', (_r, [id]) => { memberOf(id); return { status: 200, data: db.stages.filter((s) => s.establishmentId === id).sort((a, b) => a.displayOrder - b.displayOrder) }; });
+  on('GET', '/establishments/:id/members', (_r, [id]) => { memberOf(id); return { status: 200, data: db.users.filter((u) => u.isActive).map((u) => ({ id: u.id, displayName: u.displayName, roles: u.roles })) }; });
+
+  // ── Comunidad educativa ──
+  const rutOf = (value: unknown, optional = false): string | null => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text && optional) return null;
+    if (!isValidRut(text)) fail(400, 'El RUT no es válido');
+    const clean = cleanRut(text);
+    return `${Number(clean.slice(0, -1))}-${clean.slice(-1)}`;
+  };
+  const courseSummary = (id: string | null) => { const course = id ? db.courses.find((c) => c.id === id) : undefined; return course ? { id: course.id, name: course.name, academicYear: course.academicYear } : null; };
+  const studentView = (s: Student) => ({ ...s, course: courseSummary(s.courseId) });
+  const matches = (term: string | undefined, ...fields: (string | null)[]) => !term || fields.some((f) => (f ?? '').toLowerCase().includes(term.toLowerCase().replace(/\./g, '')));
+  const flag = (value: string | undefined) => (value === undefined ? undefined : value === 'true');
+  const estab = (req: Req) => { const id = req.query.establishmentId ?? fail(400, 'establishmentId requerido'); memberOf(id); return id; };
+  const dup = (message: string) => fail(409, message);
+
+  on('GET', '/courses', (req) => {
+    require('courses.read'); const id = estab(req); const active = flag(req.query.active);
+    const list = db.courses.filter((c) => c.establishmentId === id && (!req.query.academicYear || c.academicYear === Number(req.query.academicYear)) && (active === undefined || c.isActive === active))
+      .map((c) => ({ ...c, _count: { students: db.students.filter((s) => s.courseId === c.id && s.isActive).length } }));
+    return { status: 200, data: list.sort((a, b) => b.academicYear - a.academicYear || a.name.localeCompare(b.name)) };
+  });
+  on('POST', '/courses', (req) => {
+    require('courses.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId);
+    const name = str(b.name, 'name', 1, 60); const academicYear = Number(b.academicYear);
+    if (db.courses.some((c) => c.establishmentId === establishmentId && c.academicYear === academicYear && c.name === name)) dup('Ya existe un curso con ese nombre en el año indicado');
+    const created: Course = { id: uuid(), establishmentId, name, level: optStr(b.level) ?? null, academicYear, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    db.courses.push(created); log('COURSE_CREATED', 'COURSE', created.id); return { status: 201, data: created };
+  });
+  on('PATCH', '/courses/:id', (req, [id]) => {
+    require('courses.manage'); const course = db.courses.find((c) => c.id === id) ?? fail(404, 'Curso no disponible'); const b = body(req);
+    if (course.version !== expected(b)) fail(409, 'El curso fue modificado por otra persona');
+    if (typeof b.name === 'string') course.name = b.name.trim(); if ('level' in b) course.level = optStr(b.level) ?? null; if (typeof b.isActive === 'boolean') course.isActive = b.isActive;
+    stamp(course); log('COURSE_UPDATED', 'COURSE', id); return { status: 200, data: course };
+  });
+
+  const guardiansOf = (studentId: string) => db.studentGuardians.filter((l) => l.studentId === studentId).map((l) => ({ ...l, guardian: guardianSummary(db.guardians.find((g) => g.id === l.guardianId)!) }));
+  const guardianSummary = (g: Guardian) => ({ id: g.id, firstNames: g.firstNames, lastNames: g.lastNames, phone: g.phone, email: g.email, isActive: g.isActive });
+  on('GET', '/students', (req) => {
+    require('students.read'); const id = estab(req); const active = flag(req.query.active);
+    const list = db.students.filter((s) => s.establishmentId === id && (active === undefined || s.isActive === active) && (!req.query.courseId || s.courseId === req.query.courseId) && matches(req.query.search, s.firstNames, s.lastNames, s.rut))
+      .sort((a, b) => a.lastNames.localeCompare(b.lastNames) || a.firstNames.localeCompare(b.firstNames));
+    return { status: 200, data: paginate(list.map(studentView), req.query, 25) };
+  });
+  on('POST', '/students/import', (req) => {
+    require('students.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId);
+    const rows = Array.isArray(b.rows) ? (b.rows as Record<string, unknown>[]) : fail(400, 'rows inválido'); if (!rows.length || rows.length > 500) fail(400, 'rows inválido');
+    const year = Number(b.academicYear); const seen = new Set<string>(); const errors: { row: number; message: string }[] = [];
+    const parsed = rows.map((row, index) => {
+      let rut: string | null = null; try { rut = rutOf(row.rut); } catch { errors.push({ row: index + 1, message: 'RUT no válido' }); }
+      if (rut && seen.has(rut)) errors.push({ row: index + 1, message: 'RUT repetido en el archivo' }); else if (rut) seen.add(rut);
+      if (!optStr(row.firstNames) || !optStr(row.lastNames)) errors.push({ row: index + 1, message: 'Faltan nombres o apellidos' });
+      return { rut, firstNames: optStr(row.firstNames) ?? '', lastNames: optStr(row.lastNames) ?? '', birthDate: optStr(row.birthDate), courseName: optStr(row.courseName) };
+    });
+    if (errors.length) throw new FakeHttpError(400, 'El archivo tiene filas con errores; no se importó nada');
+    let created = 0; let updated = 0; let createdCourses = 0;
+    for (const row of parsed) {
+      let courseId: string | null = null;
+      if (row.courseName) {
+        let course = db.courses.find((c) => c.establishmentId === establishmentId && c.academicYear === year && c.name.toLowerCase() === row.courseName!.toLowerCase());
+        if (!course) { course = { id: uuid(), establishmentId, name: row.courseName, level: null, academicYear: year, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; db.courses.push(course); createdCourses += 1; }
+        courseId = course.id;
+      }
+      const existing = db.students.find((s) => s.establishmentId === establishmentId && s.rut === row.rut);
+      if (existing) { Object.assign(existing, { firstNames: row.firstNames, lastNames: row.lastNames, isActive: true, ...(row.birthDate ? { birthDate: `${row.birthDate}T00:00:00.000Z` } : {}), ...(courseId ? { courseId } : {}) }); stamp(existing); updated += 1; }
+      else { db.students.push({ id: uuid(), establishmentId, rut: row.rut!, firstNames: row.firstNames, lastNames: row.lastNames, birthDate: row.birthDate ? `${row.birthDate}T00:00:00.000Z` : null, courseId, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), course: null }); created += 1; }
+    }
+    log('STUDENTS_IMPORTED', 'ESTABLISHMENT', establishmentId); return { status: 201, data: { created, updated, createdCourses } };
+  });
+  on('POST', '/students', (req) => {
+    require('students.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId); const rut = rutOf(b.rut);
+    if (b.courseId && !db.courses.some((c) => c.id === b.courseId && c.establishmentId === establishmentId)) fail(404, 'Curso no disponible');
+    if (db.students.some((s) => s.establishmentId === establishmentId && s.rut === rut)) dup('Ya existe un estudiante con ese RUT en el establecimiento');
+    const created: Student = { id: uuid(), establishmentId, rut: rut!, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), birthDate: optStr(b.birthDate) ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null, courseId: (b.courseId as string) ?? null, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), course: null };
+    db.students.push(created); log('STUDENT_CREATED', 'STUDENT', created.id); return { status: 201, data: studentView(created) };
+  });
+  const studentOf = (id: string) => db.students.find((s) => s.id === id) ?? fail(404, 'Estudiante no disponible');
+  on('GET', '/students/:id', (_r, [id]) => { require('students.read'); const s = studentOf(id); return { status: 200, data: { ...studentView(s), guardianLinks: guardiansOf(id) } }; });
+  on('PATCH', '/students/:id', (req, [id]) => {
+    require('students.manage'); const s = studentOf(id); const b = body(req); if (s.version !== expected(b)) fail(409, 'El estudiante fue modificado por otra persona');
+    if (typeof b.rut === 'string') { const rut = rutOf(b.rut); if (db.students.some((x) => x.id !== id && x.establishmentId === s.establishmentId && x.rut === rut)) dup('Ya existe un estudiante con ese RUT en el establecimiento'); s.rut = rut!; }
+    if (typeof b.firstNames === 'string') s.firstNames = b.firstNames.trim(); if (typeof b.lastNames === 'string') s.lastNames = b.lastNames.trim();
+    if ('birthDate' in b) s.birthDate = b.birthDate ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null; if ('courseId' in b) s.courseId = (b.courseId as string | null) ?? null; if (typeof b.isActive === 'boolean') s.isActive = b.isActive;
+    stamp(s); log('STUDENT_UPDATED', 'STUDENT', id); return { status: 200, data: studentView(s) };
+  });
+  on('GET', '/students/:id/cases', (_r, [id]) => {
+    require('students.read'); require('cases.read'); studentOf(id);
+    const participantIds = db.participants.filter((p) => p.studentId === id).map((p) => p.id);
+    const data = db.links.filter((l) => !l.unlinkedAt && participantIds.includes(l.participantId)).map((l) => { const c = findCase(l.caseId); return { id: c.id, folio: c.folio, title: c.title, status: c.status, priority: c.priority, receivedAt: c.receivedAt, participationCode: l.participationCode }; });
+    return { status: 200, data };
+  });
+  on('POST', '/students/:id/guardians', (req, [id]) => {
+    require('students.manage'); require('guardians.manage'); const s = studentOf(id); const b = body(req);
+    const guardian = db.guardians.find((g) => g.id === b.guardianId && g.establishmentId === s.establishmentId) ?? fail(404, 'Apoderado no disponible'); const isPrimary = Boolean(b.isPrimary);
+    if (isPrimary) db.studentGuardians.filter((l) => l.studentId === id).forEach((l) => { l.isPrimary = false; });
+    const relationship = str(b.relationship, 'relationship', 2, 40).toUpperCase(); const existing = db.studentGuardians.find((l) => l.studentId === id && l.guardianId === guardian.id);
+    if (existing) Object.assign(existing, { relationship, isPrimary }); else db.studentGuardians.push({ studentId: id, guardianId: guardian.id, relationship, isPrimary, createdAt: new Date().toISOString() });
+    log('STUDENT_GUARDIAN_LINKED', 'STUDENT', id); return { status: 201, data: db.studentGuardians.find((l) => l.studentId === id && l.guardianId === guardian.id) };
+  });
+  on('POST', '/students/:id/guardians/:gid/unlink', (_r, [id, gid]) => {
+    require('students.manage'); require('guardians.manage'); studentOf(id); const index = db.studentGuardians.findIndex((l) => l.studentId === id && l.guardianId === gid); if (index < 0) fail(404, 'La relación no existe');
+    db.studentGuardians.splice(index, 1); log('STUDENT_GUARDIAN_UNLINKED', 'STUDENT', id); return { status: 201, data: { success: true } };
+  });
+
+  const guardianOf = (id: string) => db.guardians.find((g) => g.id === id) ?? fail(404, 'Apoderado no disponible');
+  on('GET', '/guardians', (req) => {
+    require('guardians.read'); const id = estab(req); const active = flag(req.query.active);
+    const list = db.guardians.filter((g) => g.establishmentId === id && (active === undefined || g.isActive === active) && (!req.query.studentId || db.studentGuardians.some((l) => l.studentId === req.query.studentId && l.guardianId === g.id)) && matches(req.query.search, g.firstNames, g.lastNames, g.rut))
+      .sort((a, b) => a.lastNames.localeCompare(b.lastNames)).map((g) => ({ ...g, _count: { studentLinks: db.studentGuardians.filter((l) => l.guardianId === g.id).length } }));
+    return { status: 200, data: paginate(list, req.query, 25) };
+  });
+  on('POST', '/guardians', (req) => {
+    require('guardians.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId); const rut = rutOf(b.rut, true);
+    if (rut && db.guardians.some((g) => g.establishmentId === establishmentId && g.rut === rut)) dup('Ya existe un apoderado con ese RUT en el establecimiento');
+    const created: Guardian = { id: uuid(), establishmentId, rut, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), email: optStr(b.email)?.toLowerCase() ?? null, phone: optStr(b.phone) ?? null, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    db.guardians.push(created); log('GUARDIAN_CREATED', 'GUARDIAN', created.id); return { status: 201, data: created };
+  });
+  on('GET', '/guardians/:id', (_r, [id]) => {
+    require('guardians.read'); const g = guardianOf(id);
+    const studentLinks = db.studentGuardians.filter((l) => l.guardianId === id).map((l) => { const s = studentOf(l.studentId); return { ...l, student: { id: s.id, firstNames: s.firstNames, lastNames: s.lastNames, isActive: s.isActive, course: courseSummary(s.courseId) } }; });
+    return { status: 200, data: { ...g, studentLinks } };
+  });
+  on('PATCH', '/guardians/:id', (req, [id]) => {
+    require('guardians.manage'); const g = guardianOf(id); const b = body(req); if (g.version !== expected(b)) fail(409, 'El apoderado fue modificado por otra persona');
+    if ('rut' in b) { const rut = rutOf(b.rut, true); if (rut && db.guardians.some((x) => x.id !== id && x.establishmentId === g.establishmentId && x.rut === rut)) dup('Ya existe un apoderado con ese RUT en el establecimiento'); g.rut = rut; }
+    if (typeof b.firstNames === 'string') g.firstNames = b.firstNames.trim(); if (typeof b.lastNames === 'string') g.lastNames = b.lastNames.trim();
+    if ('email' in b) g.email = optStr(b.email)?.toLowerCase() ?? null; if ('phone' in b) g.phone = optStr(b.phone) ?? null; if (typeof b.isActive === 'boolean') g.isActive = b.isActive;
+    stamp(g); log('GUARDIAN_UPDATED', 'GUARDIAN', id); return { status: 200, data: g };
+  });
+
+  const staffView = (m: StaffMember) => ({ ...m, user: m.userId ? { id: m.userId, displayName: db.users.find((u) => u.id === m.userId)?.displayName ?? 'Usuario' } : null });
+  on('GET', '/staff', (req) => {
+    require('staff.read'); const id = estab(req); const active = flag(req.query.active);
+    const list = db.staff.filter((m) => m.establishmentId === id && (active === undefined || m.isActive === active) && matches(req.query.search, m.firstNames, m.lastNames, m.rut)).sort((a, b) => a.lastNames.localeCompare(b.lastNames));
+    return { status: 200, data: paginate(list.map(staffView), req.query, 25) };
+  });
+  on('POST', '/staff', (req) => {
+    require('staff.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId); const rut = rutOf(b.rut, true); const userId = (b.userId as string | undefined) ?? null;
+    if (userId && !db.users.some((u) => u.id === userId)) fail(404, 'Establecimiento no disponible');
+    if ((rut && db.staff.some((m) => m.establishmentId === establishmentId && m.rut === rut)) || (userId && db.staff.some((m) => m.userId === userId))) dup('Ya existe un funcionario con ese RUT o esa cuenta de usuario');
+    const created: StaffMember = { id: uuid(), establishmentId, rut, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), position: str(b.position, 'position', 2, 120), email: optStr(b.email)?.toLowerCase() ?? null, phone: optStr(b.phone) ?? null, userId, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), user: null };
+    db.staff.push(created); log('STAFF_CREATED', 'STAFF_MEMBER', created.id); return { status: 201, data: staffView(created) };
+  });
+  on('PATCH', '/staff/:id', (req, [id]) => {
+    require('staff.manage'); const m = db.staff.find((x) => x.id === id) ?? fail(404, 'Funcionario no disponible'); const b = body(req); if (m.version !== expected(b)) fail(409, 'El funcionario fue modificado por otra persona');
+    if ('rut' in b) m.rut = rutOf(b.rut, true); if (typeof b.firstNames === 'string') m.firstNames = b.firstNames.trim(); if (typeof b.lastNames === 'string') m.lastNames = b.lastNames.trim(); if (typeof b.position === 'string') m.position = b.position.trim();
+    if ('email' in b) m.email = optStr(b.email)?.toLowerCase() ?? null; if ('phone' in b) m.phone = optStr(b.phone) ?? null; if ('userId' in b) m.userId = (b.userId as string | null) ?? null; if (typeof b.isActive === 'boolean') m.isActive = b.isActive;
+    stamp(m); log('STAFF_UPDATED', 'STAFF_MEMBER', id); return { status: 200, data: staffView(m) };
+  });
+
+  // ── Citaciones y derivaciones ──
+  const caseRef = (id: string) => { const c = findCase(id); return { id: c.id, folio: c.folio, title: c.title, status: c.status, establishmentId: c.establishmentId }; };
+  on('GET', '/cases/:id/summons', (_r, [id]) => { require('summons.read'); findCase(id); return { status: 200, data: db.summons.filter((s) => s.caseId === id).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)) }; });
+  on('POST', '/cases/:id/summons', (req, [id]) => {
+    require('summons.manage'); openCase(id); const b = body(req); let recipientLabel = optStr(b.recipientLabel);
+    if (b.participantId) { const link = db.links.find((l) => l.caseId === id && l.participantId === b.participantId && !l.unlinkedAt) ?? fail(404, 'El involucrado no está asociado al expediente'); recipientLabel = recipientLabel ?? link.participant.referenceLabel; }
+    const label = recipientLabel ?? fail(400, 'Indique a quién se cita');
+    const created: CaseSummons = { id: uuid(), caseId: id, participantId: (b.participantId as string) ?? null, recipientLabel: label, scheduledAt: str(b.scheduledAt, 'scheduledAt', 8, 40), location: str(b.location, 'location', 2, 200), reason: str(b.reason, 'reason', 3, 1000), status: 'PROGRAMADA', outcomeNote: null, createdByUserId: db.me.id, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    db.summons.push(created); event(id, 'SUMMONS_CREATED', { relatedEntityType: 'CASE_SUMMONS', relatedEntityId: created.id }); log('SUMMONS_CREATED', 'CASE_SUMMONS', created.id); return { status: 201, data: created };
+  });
+  on('POST', '/cases/:id/summons/:sid/update', (req, [id, sid]) => {
+    require('summons.manage'); openCase(id); const s = db.summons.find((x) => x.id === sid && x.caseId === id) ?? fail(404, 'Citación no disponible'); const b = body(req);
+    if (s.status !== 'PROGRAMADA') fail(409, 'La citación ya fue cerrada y no admite cambios');
+    if (b.status === 'CANCELADA' && !optStr(b.outcomeNote)) fail(400, 'Indique el motivo de la cancelación');
+    if (s.version !== expected(b)) fail(409, 'La citación fue modificada por otra persona');
+    if (typeof b.status === 'string') s.status = b.status as SummonsStatus; if (typeof b.scheduledAt === 'string') s.scheduledAt = b.scheduledAt; if (typeof b.location === 'string') s.location = b.location.trim(); if (typeof b.reason === 'string') s.reason = b.reason.trim(); if (typeof b.outcomeNote === 'string') s.outcomeNote = b.outcomeNote.trim() || null;
+    stamp(s); event(id, 'SUMMONS_UPDATED', { relatedEntityType: 'CASE_SUMMONS', relatedEntityId: sid }); log('SUMMONS_UPDATED', 'CASE_SUMMONS', sid); return { status: 201, data: s };
+  });
+  on('GET', '/summons', (req) => {
+    require('summons.read'); const q = req.query;
+    const list = db.summons.filter((s) => (!q.status || s.status === q.status) && (!q.from || s.scheduledAt >= q.from) && (!q.to || s.scheduledAt <= q.to) && (!q.establishmentId || findCase(s.caseId).establishmentId === q.establishmentId)).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    return { status: 200, data: paginate(list.map((s) => ({ ...s, case: caseRef(s.caseId) })), q, 25) };
+  });
+  const REFERRAL_NEXT: Record<ReferralStatus, ReferralStatus[]> = { PENDIENTE: ['ENVIADA', 'CERRADA'], ENVIADA: ['CON_RESPUESTA', 'CERRADA'], CON_RESPUESTA: ['CERRADA'], CERRADA: [] };
+  on('GET', '/cases/:id/referrals', (_r, [id]) => { require('referrals.read'); findCase(id); return { status: 200, data: db.referrals.filter((r) => r.caseId === id) }; });
+  on('POST', '/cases/:id/referrals', (req, [id]) => {
+    require('referrals.manage'); openCase(id); const b = body(req);
+    const created: CaseReferral = { id: uuid(), caseId: id, typeCode: str(b.typeCode, 'typeCode', 2, 40).toUpperCase(), institutionName: str(b.institutionName, 'institutionName', 2, 200), reason: str(b.reason, 'reason', 3, 2000), status: 'PENDIENTE', contactName: optStr(b.contactName) ?? null, sentAt: null, responseNote: null, responseAt: null, closedAt: null, createdByUserId: db.me.id, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    db.referrals.push(created); event(id, 'REFERRAL_CREATED', { relatedEntityType: 'CASE_REFERRAL', relatedEntityId: created.id }); log('REFERRAL_CREATED', 'CASE_REFERRAL', created.id); return { status: 201, data: created };
+  });
+  on('POST', '/cases/:id/referrals/:rid/update', (req, [id, rid]) => {
+    require('referrals.manage'); openCase(id); const r = db.referrals.find((x) => x.id === rid && x.caseId === id) ?? fail(404, 'Derivación no disponible'); const b = body(req);
+    if (r.status === 'CERRADA') fail(409, 'La derivación ya fue cerrada y no admite cambios');
+    const to = b.status as ReferralStatus | undefined; if (to && to !== r.status && !REFERRAL_NEXT[r.status].includes(to)) fail(409, 'Cambio de estado no permitido');
+    if (r.version !== expected(b)) fail(409, 'La derivación fue modificada por otra persona');
+    const now = new Date().toISOString();
+    if (to && to !== r.status) { r.status = to; if (to === 'ENVIADA') r.sentAt = now; if (to === 'CON_RESPUESTA') r.responseAt = now; if (to === 'CERRADA') r.closedAt = now; }
+    if ('contactName' in b) r.contactName = optStr(b.contactName) ?? null; if ('responseNote' in b) r.responseNote = optStr(b.responseNote) ?? null;
+    stamp(r); event(id, 'REFERRAL_UPDATED', { relatedEntityType: 'CASE_REFERRAL', relatedEntityId: rid }); log('REFERRAL_UPDATED', 'CASE_REFERRAL', rid); return { status: 201, data: r };
+  });
+  on('GET', '/referrals', (req) => {
+    require('referrals.read'); const q = req.query;
+    const list = db.referrals.filter((r) => (!q.status || r.status === q.status) && (!q.establishmentId || findCase(r.caseId).establishmentId === q.establishmentId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return { status: 200, data: paginate(list.map((r) => ({ ...r, case: caseRef(r.caseId) })), q, 25) };
   });
 
   const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);

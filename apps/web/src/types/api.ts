@@ -37,7 +37,7 @@ export type CaseEventType =
   | 'CASE_CREATED' | 'CASE_UPDATED' | 'CASE_ASSIGNED' | 'CASE_STAGE_CHANGED' | 'CASE_TRANSITIONED' | 'CASE_PAUSED' | 'CASE_RESUMED' | 'CASE_RESOLVED' | 'CASE_CLOSED'
   | 'CASE_REOPENED' | 'REPORT_CREATED' | 'REPORT_UPDATED' | 'PARTICIPANT_LINKED' | 'PARTICIPANT_UNLINKED' | 'INTERVIEW_CREATED' | 'INTERVIEW_FINALIZED'
   | 'INTERVIEW_CORRECTED' | 'DOCUMENT_UPLOADED' | 'PROTOCOL_APPLIED' | 'MEASURE_CREATED' | 'MEASURE_UPDATED' | 'FOLLOW_UP_CREATED' | 'TASK_CREATED'
-  | 'TASK_COMPLETED' | 'NOTIFICATION_CREATED';
+  | 'TASK_COMPLETED' | 'NOTIFICATION_CREATED' | 'SUMMONS_CREATED' | 'SUMMONS_UPDATED' | 'REFERRAL_CREATED' | 'REFERRAL_UPDATED';
 
 export interface CaseEvent {
   id: Uuid; caseId: Uuid; actorUserId: Uuid | null; occurredAt: IsoDate; eventType: CaseEventType; previousStatus: CaseStatus | null; newStatus: CaseStatus | null;
@@ -50,7 +50,10 @@ export interface CaseReport {
 }
 
 export type ParticipantKind = 'ESTUDIANTE' | 'APODERADO' | 'FUNCIONARIO' | 'TERCERO';
-export interface Participant { id: Uuid; establishmentId: Uuid; kind: ParticipantKind; referenceLabel: string; isActive: boolean; createdAt: IsoDate; updatedAt: IsoDate }
+export interface Participant {
+  id: Uuid; establishmentId: Uuid; kind: ParticipantKind; referenceLabel: string; studentId?: Uuid | null; guardianId?: Uuid | null; staffMemberId?: Uuid | null;
+  isActive: boolean; createdAt: IsoDate; updatedAt: IsoDate;
+}
 export interface CaseParticipantLink { id: Uuid; caseId: Uuid; participantId: Uuid; participationCode: string; linkedByUserId: Uuid; linkedAt: IsoDate; unlinkedAt: IsoDate | null; participant: Participant }
 
 export type InterviewStatus = 'BORRADOR' | 'FINALIZADA';
@@ -81,6 +84,35 @@ export interface CaseTask { id: Uuid; caseId: Uuid; createdByUserId: Uuid; assig
 
 export interface AppNotification { id: Uuid; userId: Uuid; caseId: Uuid | null; type: string; title: string; body: string; readAt: IsoDate | null; createdAt: IsoDate }
 
+// ── Comunidad educativa (docs/api/community-contract.md) ─────────────────────────────────────────────────────
+export interface CourseSummary { id: Uuid; name: string; academicYear: number }
+export interface Course { id: Uuid; establishmentId: Uuid; name: string; level: string | null; academicYear: number; isActive: boolean; version: number; createdAt: IsoDate; updatedAt: IsoDate; _count?: { students: number } }
+export interface Student { id: Uuid; establishmentId: Uuid; rut: string; firstNames: string; lastNames: string; birthDate: IsoDate | null; courseId: Uuid | null; isActive: boolean; version: number; createdAt: IsoDate; updatedAt: IsoDate; course: CourseSummary | null }
+export interface GuardianSummary { id: Uuid; firstNames: string; lastNames: string; phone: string | null; email: string | null; isActive: boolean }
+export interface StudentGuardianLink { studentId: Uuid; guardianId: Uuid; relationship: string; isPrimary: boolean; createdAt: IsoDate; guardian: GuardianSummary }
+export interface StudentDetail extends Student { guardianLinks: StudentGuardianLink[] }
+export interface Guardian { id: Uuid; establishmentId: Uuid; rut: string | null; firstNames: string; lastNames: string; email: string | null; phone: string | null; isActive: boolean; version: number; createdAt: IsoDate; updatedAt: IsoDate; _count?: { studentLinks: number } }
+export interface GuardianStudentLink { studentId: Uuid; guardianId: Uuid; relationship: string; isPrimary: boolean; createdAt: IsoDate; student: { id: Uuid; firstNames: string; lastNames: string; isActive: boolean; course: CourseSummary | null } }
+export interface GuardianDetail extends Guardian { studentLinks: GuardianStudentLink[] }
+export interface StaffMember { id: Uuid; establishmentId: Uuid; rut: string | null; firstNames: string; lastNames: string; position: string; email: string | null; phone: string | null; userId: Uuid | null; isActive: boolean; version: number; createdAt: IsoDate; updatedAt: IsoDate; user: { id: Uuid; displayName: string } | null }
+export interface StudentCaseRef { id: Uuid; folio: number; title: string; status: CaseStatus; priority: string; receivedAt: IsoDate; participationCode: string }
+export interface EstablishmentMember { id: Uuid; displayName: string; roles: string[] }
+export interface ImportStudentRow { rut: string; firstNames: string; lastNames: string; birthDate?: string; courseName?: string }
+export interface ImportStudentsResult { created: number; updated: number; createdCourses: number }
+
+// ── Citaciones y derivaciones ──────────────────────────────────────────────────────────────────────────────
+export type SummonsStatus = 'PROGRAMADA' | 'REALIZADA' | 'NO_ASISTIO' | 'CANCELADA';
+export type ReferralStatus = 'PENDIENTE' | 'ENVIADA' | 'CON_RESPUESTA' | 'CERRADA';
+export interface CaseRef { id: Uuid; folio: number; title: string; status: CaseStatus; establishmentId: Uuid }
+export interface CaseSummons {
+  id: Uuid; caseId: Uuid; participantId: Uuid | null; recipientLabel: string; scheduledAt: IsoDate; location: string; reason: string; status: SummonsStatus; outcomeNote: string | null;
+  createdByUserId: Uuid; version: number; createdAt: IsoDate; updatedAt: IsoDate; case?: CaseRef;
+}
+export interface CaseReferral {
+  id: Uuid; caseId: Uuid; typeCode: string; institutionName: string; reason: string; status: ReferralStatus; contactName: string | null; sentAt: IsoDate | null; responseNote: string | null;
+  responseAt: IsoDate | null; closedAt: IsoDate | null; createdByUserId: Uuid; version: number; createdAt: IsoDate; updatedAt: IsoDate; case?: CaseRef;
+}
+
 // ── Entradas (cuerpos de solicitud) ───────────────────────────────────────────────────────────────────────
 export interface CreateCaseInput { establishmentId: Uuid; title: string; initialDescription?: string; receivedAt: IsoDate; categoryCode: string; priority: string; currentStageId?: Uuid; responsibleUserId?: Uuid; nextAction?: string; nextActionDueAt?: IsoDate }
 export interface UpdateCaseInput { expectedVersion: number; title?: string; categoryCode?: string; priority?: string; receivedAt?: IsoDate; currentStageId?: Uuid | null; nextAction?: string | null; nextActionDueAt?: IsoDate | null }
@@ -92,3 +124,7 @@ export interface InterviewInput { occurredAt: IsoDate; modalityCode: string; sum
 export interface MeasureInput { title: string; description?: string; dueAt?: IsoDate; responsibleUserIds: Uuid[] }
 export interface FollowUpInput { occurredAt: IsoDate; note: string; nextAction?: string; nextActionDueAt?: IsoDate }
 export interface TaskInput { title: string; dueAt?: IsoDate; assignedToUserId?: Uuid }
+export interface SummonsInput { participantId?: Uuid; recipientLabel?: string; scheduledAt: IsoDate; location: string; reason: string }
+export interface UpdateSummonsInput { expectedVersion: number; status?: SummonsStatus; scheduledAt?: IsoDate; location?: string; reason?: string; outcomeNote?: string }
+export interface ReferralInput { typeCode: string; institutionName: string; reason: string; contactName?: string }
+export interface UpdateReferralInput { expectedVersion: number; status?: ReferralStatus; contactName?: string | null; responseNote?: string | null }

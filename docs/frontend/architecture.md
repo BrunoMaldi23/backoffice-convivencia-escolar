@@ -8,14 +8,14 @@
 apps/web/src/
 ├── assets/              logo.png (original del colegio, sin modificar)
 ├── components/          componentes reutilizables y tipos de configuración (types.ts)
-├── composables/         consultas y mutaciones con Vue Query (useCases, useCaseContent, useAdmin, useScoped, useSession…)
+├── composables/         consultas y mutaciones con Vue Query (useCases, useCaseContent, useCaseActions, useCommunity, useAdmin, useScoped, useSession…)
 ├── config/preview.ts    bandera del modo de previsualización
 ├── layouts/             AppLayout, AuthLayout, sidebar, header, migas, notificaciones, menú de usuario
 ├── lib/                 formato, RUT, validación, errores, estados, catálogos, roles, auditoría, indicadores, acceso
 ├── modules/<dominio>/   vistas de ruta y sus pestañas/diálogos por dominio
 ├── preview/fakeApi.ts   API simulada (solo `dev:preview` y pruebas)
 ├── router/              rutas, navegación lateral y guardia de sesión
-├── services/            clientes HTTP tipados: api.ts, auth.ts, admin.ts, cases.ts, caseOperations.ts
+├── services/            clientes HTTP tipados: api.ts, auth.ts, admin.ts, cases.ts, caseOperations.ts, community.ts
 ├── types/api.ts         tipos de la API (contratos del backend)
 ├── theme.ts             preset institucional de PrimeVue y textos es-CL
 └── style.css            capas CSS, fuente y ajustes globales
@@ -61,4 +61,4 @@ pnpm --filter @backoffice/web dev:preview   # Vite en modo ui-preview, API simul
 
 ## Pruebas
 
-`pnpm --filter @backoffice/web test` (Vitest, 62 pruebas): validaciones, RUT, fechas, errores, indicadores, máquina de estados, capa HTTP y CSRF, y flujos de servicios contra el simulador (`tests/api-flows.spec.ts`). Esas pruebas validan la lógica del frontend; no sustituyen una prueba con el backend real.
+`pnpm --filter @backoffice/web test` (Vitest, 89 pruebas): validaciones, RUT, fechas, errores, indicadores, máquina de estados, capa HTTP y CSRF, y flujos de servicios contra el simulador (`tests/api-flows.spec.ts` y `tests/community-flows.spec.ts`) y lectura de CSV (`tests/csv.spec.ts`). Esas pruebas validan la lógica del frontend; no sustituyen una prueba con el backend real.

@@ -20,7 +20,7 @@ export const createReport = async (caseId: Uuid, input: ReportInput): Promise<Ca
 export const updateReport = async (caseId: Uuid, id: Uuid, input: UpdateReportInput): Promise<CaseReport> => (await api.patch<CaseReport>(`/cases/${caseId}/reports/${id}`, input)).data;
 
 export const listCaseParticipants = async (caseId: Uuid): Promise<CaseParticipantLink[]> => (await api.get<CaseParticipantLink[]>(`/cases/${caseId}/participants`)).data;
-export const createParticipant = async (input: { establishmentId: Uuid; kind: ParticipantKind; referenceLabel: string }): Promise<Participant> => (await api.post<Participant>('/participants', input)).data;
+export const createParticipant = async (input: { establishmentId: Uuid; kind: ParticipantKind; referenceLabel?: string; studentId?: Uuid; guardianId?: Uuid; staffMemberId?: Uuid }): Promise<Participant> => (await api.post<Participant>('/participants', input)).data;
 export const linkParticipant = async (caseId: Uuid, input: { participantId: Uuid; participationCode: string }): Promise<CaseParticipantLink> => (await api.post<CaseParticipantLink>(`/cases/${caseId}/participants`, input)).data;
 export const unlinkParticipant = async (caseId: Uuid, linkId: Uuid): Promise<CaseParticipantLink> => (await api.post<CaseParticipantLink>(`/cases/${caseId}/participants/${linkId}/unlink`, {})).data;
 

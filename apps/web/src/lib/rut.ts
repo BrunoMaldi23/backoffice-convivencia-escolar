@@ -19,7 +19,8 @@ export function isValidRut(value: string): boolean {
   const clean = cleanRut(value);
   if (clean.length < 2) return false;
   const body = clean.slice(0, -1);
-  if (!/^\d{1,8}$/.test(body)) return false;
+  // Mismo rango que la API (7 u 8 dígitos más el verificador): un RUT más corto o más largo se rechazaría en el servidor.
+  if (!/^\d{7,8}$/.test(body)) return false;
   return rutCheckDigit(body) === clean.slice(-1);
 }
 

@@ -36,6 +36,8 @@ describe('RUT', () => {
     expect(isValidRut('12345678-5')).toBe(true);
     expect(isValidRut('12.345.678-4')).toBe(false);
     expect(isValidRut('1')).toBe(false);
+    expect(isValidRut('1-9')).toBe(false);
+    expect(isValidRut('1.000.000-9')).toBe(true);
     expect(isValidRut('abc')).toBe(false);
   });
 

@@ -39,12 +39,14 @@ El preset de PrimeVue (`src/theme.ts`) mapea su primario a la escala sky, fija e
 | `StatCard` | Indicador numérico; muestra "—" si no hay dato (nunca un número inventado) |
 | `StatusBadge` / `PriorityBadge` | Estado con ícono + texto; prioridad con barras de nivel + texto |
 | `QueryState`, `LoadingState`, `ErrorState`, `EmptyState` | Los cuatro estados de datos (el error 403 no ofrece reintento) |
-| `SearchToolbar` | Búsqueda y filtros en una sola fila |
+| `SearchToolbar` | Búsqueda y filtros en una sola fila (`searchable=false` deja solo los filtros) |
 | `AppTable` | Tabla sobre PrimeVue DataTable: modo cliente (orden y paginación locales) o modo servidor (`total`, `page`, `limit`), columnas adaptativas y celdas por slot |
 | `MutationDialog`, `ConfirmActionDialog`, `ApiErrorMessage` | Escrituras con diálogo que permanece abierto ante errores; un 409 ofrece "Recargar datos" |
 | `FormField`, `IconInput`, `UserSelect` | Campos accesibles; selector de persona con lista (con `users.read`) o identificador |
 | `DetailPanel`, `Timeline` | Fichas de detalle y líneas de tiempo |
 | `ScopeNotice` | Indica cuántos expedientes revisó una vista global |
+| `PersonPicker` | Buscador de estudiantes, apoderados o funcionarios por nombre o RUT (consulta al servidor mientras se escribe) |
+| `NoEstablishment` | Aviso cuando la cuenta no pertenece a ningún establecimiento |
 | `BarChart` | Barras de una serie, con tooltip, foco de teclado y vista de tabla |
 | `InstitutionLogo`, `AppIcon` | Identidad (completo sobre azul, escudo sobre fondo claro) e iconografía lineal propia |
 

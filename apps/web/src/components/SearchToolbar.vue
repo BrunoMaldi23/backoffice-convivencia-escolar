@@ -9,7 +9,7 @@ import AppIcon from './AppIcon.vue';
 import type { FilterDef } from './types';
 
 /** Buscador y filtros en una sola fila sobre la tabla. Los filtros vacíos significan "todos". */
-const props = withDefaults(defineProps<{ filters?: FilterDef[]; placeholder?: string; total?: number | null }>(), { filters: () => [], placeholder: 'Buscar', total: null });
+const props = withDefaults(defineProps<{ filters?: FilterDef[]; placeholder?: string; total?: number | null; searchable?: boolean }>(), { filters: () => [], placeholder: 'Buscar', total: null, searchable: true });
 const search = defineModel<string>('search', { default: '' });
 const values = defineModel<Record<string, string | null>>('values', { default: () => ({}) });
 const active = computed(() => Boolean(search.value) || Object.values(values.value).some(Boolean));
@@ -25,7 +25,7 @@ function clear() {
 
 <template>
   <div class="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
-    <IconField class="w-full lg:max-w-xs">
+    <IconField v-if="searchable" class="w-full lg:max-w-xs">
       <InputIcon><AppIcon name="search" :size="16" class="text-slate-500" /></InputIcon>
       <InputText v-model="search" :placeholder="placeholder" :aria-label="placeholder" class="w-full" type="search" />
     </IconField>

@@ -30,8 +30,10 @@ import InterviewsTab from './tabs/InterviewsTab.vue';
 import MeasuresTab from './tabs/MeasuresTab.vue';
 import ParticipantsTab from './tabs/ParticipantsTab.vue';
 import ProtocolsTab from './tabs/ProtocolsTab.vue';
+import ReferralsTab from './tabs/ReferralsTab.vue';
 import ReportsTab from './tabs/ReportsTab.vue';
 import SummaryTab from './tabs/SummaryTab.vue';
+import SummonsTab from './tabs/SummonsTab.vue';
 import TasksTab from './tabs/TasksTab.vue';
 import TimelineTab from './tabs/TimelineTab.vue';
 
@@ -50,7 +52,8 @@ const TABS = [
   { key: 'resumen', label: 'Resumen', permission: undefined }, { key: 'linea', label: 'Línea de tiempo', permission: 'cases.timeline.read' }, { key: 'denuncias', label: 'Denuncias', permission: 'reports.read' },
   { key: 'involucrados', label: 'Involucrados', permission: 'participants.read' }, { key: 'entrevistas', label: 'Entrevistas', permission: 'interviews.read' }, { key: 'documentos', label: 'Documentos', permission: 'documents.read' },
   { key: 'protocolos', label: 'Protocolos', permission: 'protocols.read' }, { key: 'medidas', label: 'Medidas', permission: 'measures.read' }, { key: 'seguimientos', label: 'Seguimientos', permission: 'follow-ups.read' },
-  { key: 'tareas', label: 'Tareas', permission: 'tasks.read' }, { key: 'acceso', label: 'Accesos', permission: 'case-grants.manage' }
+  { key: 'tareas', label: 'Tareas', permission: 'tasks.read' }, { key: 'citaciones', label: 'Citaciones', permission: 'summons.read' }, { key: 'derivaciones', label: 'Derivaciones', permission: 'referrals.read' },
+  { key: 'acceso', label: 'Accesos', permission: 'case-grants.manage' }
 ] as const;
 const tabs = computed(() => TABS.filter((tab) => can(tab.permission)));
 const tab = computed<string>({
@@ -109,6 +112,8 @@ const reload = () => { void query.refetch(); };
           <TabPanel v-if="can('measures.read')" value="medidas"><MeasuresTab :case-record="record" /></TabPanel>
           <TabPanel v-if="can('follow-ups.read')" value="seguimientos"><FollowUpsTab :case-id="id" /></TabPanel>
           <TabPanel v-if="can('tasks.read')" value="tareas"><TasksTab :case-id="id" /></TabPanel>
+          <TabPanel v-if="can('summons.read')" value="citaciones"><SummonsTab :case-record="record" /></TabPanel>
+          <TabPanel v-if="can('referrals.read')" value="derivaciones"><ReferralsTab :case-record="record" /></TabPanel>
           <TabPanel v-if="can('case-grants.manage')" value="acceso"><AccessTab :case-id="id" /></TabPanel>
         </TabPanels>
       </Tabs>
