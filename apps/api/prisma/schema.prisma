@@ -39,6 +39,15 @@ model User {
   caseParticipantLinks CaseParticipant[] @relation("CaseParticipantLinker")
   interviewsConducted Interview[] @relation("InterviewInterviewer")
   interviewCorrections InterviewCorrection[] @relation("InterviewCorrectionActor")
+  documentsUploaded CaseDocument[] @relation("CaseDocumentUploader")
+  protocolVersionsCreated ProtocolVersion[] @relation("ProtocolVersionCreator")
+  protocolApplicationsCreated CaseProtocolApplication[] @relation("ProtocolApplicationActor")
+  measuresCreated CaseMeasure[] @relation("CaseMeasureCreator")
+  measureResponsibilities CaseMeasureResponsible[] @relation("CaseMeasureResponsibleUser")
+  followUpsCreated CaseFollowUp[] @relation("CaseFollowUpCreator")
+  tasksCreated CaseTask[] @relation("CaseTaskCreator")
+  tasksAssigned CaseTask[] @relation("CaseTaskAssignee")
+  notifications Notification[] @relation("NotificationRecipient")
   @@map("users")
 }
 
@@ -74,6 +83,14 @@ enum CaseEventType {
   INTERVIEW_CREATED
   INTERVIEW_FINALIZED
   INTERVIEW_CORRECTED
+  DOCUMENT_UPLOADED
+  PROTOCOL_APPLIED
+  MEASURE_CREATED
+  MEASURE_UPDATED
+  FOLLOW_UP_CREATED
+  TASK_CREATED
+  TASK_COMPLETED
+  NOTIFICATION_CREATED
 }
 
 enum InterviewStatus {
@@ -86,6 +103,26 @@ enum ParticipantKind {
   APODERADO
   FUNCIONARIO
   TERCERO
+}
+
+enum DocumentKind {
+  DOCUMENTO
+  EVIDENCIA
+}
+enum ProtocolVersionStatus {
+  BORRADOR
+  PUBLICADO
+  RETIRADO
+}
+enum MeasureStatus {
+  PENDIENTE
+  COMPLETADA
+  CANCELADA
+}
+enum TaskStatus {
+  PENDIENTE
+  COMPLETADA
+  CANCELADA
 }
 
 model Establishment {
@@ -102,6 +139,7 @@ model Establishment {
   cases Case[]
   reports CaseReport[]
   participants Participant[]
+  protocolTemplates ProtocolTemplate[]
   @@map("establishments")
 }
 
@@ -164,6 +202,12 @@ model Case {
   reports CaseReport[]
   participants CaseParticipant[]
   interviews Interview[]
+  documents CaseDocument[]
+  protocolApplications CaseProtocolApplication[]
+  measures CaseMeasure[]
+  followUps CaseFollowUp[]
+  tasks CaseTask[]
+  notifications Notification[]
   @@unique([establishmentId, folio])
   @@index([establishmentId, status, updatedAt])
   @@index([establishmentId, responsibleUserId])
@@ -201,6 +245,146 @@ model InterviewCorrection {
   actor User @relation("InterviewCorrectionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
   @@index([interviewId, createdAt])
   @@map("interview_corrections")
+}
+
+model CaseDocument {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  uploadedByUserId String @map("uploaded_by_user_id")
+  kind DocumentKind
+  originalFilename String @map("original_filename")
+  storageKey String @unique @map("storage_key")
+  contentType String @map("content_type")
+  sizeBytes Int @map("size_bytes")
+  sha256 String
+  createdAt DateTime @default(now()) @map("created_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  uploadedByUser User @relation("CaseDocumentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, createdAt])
+  @@map("case_documents")
+}
+
+model ProtocolTemplate {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  code String
+  name String
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  versions ProtocolVersion[]
+  @@unique([establishmentId, code])
+  @@map("protocol_templates")
+}
+
+model ProtocolVersion {
+  id String @id @default(uuid())
+  protocolTemplateId String @map("protocol_template_id")
+  version Int
+  title String
+  content Json
+  status ProtocolVersionStatus @default(BORRADOR)
+  createdByUserId String @map("created_by_user_id")
+  publishedAt DateTime? @map("published_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  protocolTemplate ProtocolTemplate @relation(fields: [protocolTemplateId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("ProtocolVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  applications CaseProtocolApplication[]
+  @@unique([protocolTemplateId, version])
+  @@index([protocolTemplateId, status])
+  @@map("protocol_versions")
+}
+
+model CaseProtocolApplication {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  protocolVersionId String @map("protocol_version_id")
+  appliedByUserId String @map("applied_by_user_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  protocolVersion ProtocolVersion @relation(fields: [protocolVersionId], references: [id], onDelete: Restrict)
+  appliedByUser User @relation("ProtocolApplicationActor", fields: [appliedByUserId], references: [id], onDelete: Restrict)
+  @@unique([caseId, protocolVersionId])
+  @@map("case_protocol_applications")
+}
+
+model CaseMeasure {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  createdByUserId String @map("created_by_user_id")
+  title String
+  description String?
+  dueAt DateTime? @map("due_at")
+  status MeasureStatus @default(PENDIENTE)
+  version Int @default(1)
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("CaseMeasureCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  responsibles CaseMeasureResponsible[]
+  @@index([caseId, status, dueAt])
+  @@map("case_measures")
+}
+
+model CaseMeasureResponsible {
+  measureId String @map("measure_id")
+  userId String @map("user_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  measure CaseMeasure @relation(fields: [measureId], references: [id], onDelete: Cascade)
+  user User @relation("CaseMeasureResponsibleUser", fields: [userId], references: [id], onDelete: Restrict)
+  @@id([measureId, userId])
+  @@map("case_measure_responsibles")
+}
+
+model CaseFollowUp {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  createdByUserId String @map("created_by_user_id")
+  occurredAt DateTime @map("occurred_at")
+  note String
+  nextAction String? @map("next_action")
+  nextActionDueAt DateTime? @map("next_action_due_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("CaseFollowUpCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, occurredAt])
+  @@map("case_follow_ups")
+}
+
+model CaseTask {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  createdByUserId String @map("created_by_user_id")
+  assignedToUserId String? @map("assigned_to_user_id")
+  title String
+  dueAt DateTime? @map("due_at")
+  status TaskStatus @default(PENDIENTE)
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("CaseTaskCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  assignedToUser User? @relation("CaseTaskAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, status, dueAt])
+  @@index([assignedToUserId, status, dueAt])
+  @@map("case_tasks")
+}
+
+model Notification {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  caseId String? @map("case_id")
+  type String
+  title String
+  body String
+  readAt DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  case Case? @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }
 
 model CaseReport {

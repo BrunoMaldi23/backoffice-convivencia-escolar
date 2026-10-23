@@ -13,4 +13,6 @@ import { SecurityAuditModule } from './common/security/security-audit.module';
 import { InstitutionsModule } from './modules/institutions/institutions.module';
 import { CasesModule } from './modules/cases/cases.module';
 import { ReportsParticipantsModule } from './modules/reports-participants/reports-participants.module';
-@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule, InstitutionsModule, CasesModule, ReportsParticipantsModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}
+import { InterviewsModule } from './modules/interviews/interviews.module';
+import { CaseOperationsModule } from './modules/case-operations/case-operations.module';
+@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule, InstitutionsModule, CasesModule, ReportsParticipantsModule, InterviewsModule, CaseOperationsModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}

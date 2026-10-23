@@ -16,6 +16,7 @@ coverage/
 .turbo/
 storage/postgres/
 storage/uploads/
+data/private/
 !.gitkeep
 apps/api/generated/
 apps/api/prisma/dev.db
