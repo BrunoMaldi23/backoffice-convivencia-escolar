@@ -66,7 +66,7 @@ Siguen pendientes en el backend:
 
 ## Problemas del backend
 
-- **Límite de cuerpo JSON de ~100 KB** (verificado contra la API real con un cuerpo sintético a un endpoint público: 200 KB → HTTP 413). Como la carga de documentos envía el archivo en base64 dentro de un JSON, solo caben archivos de hasta ~75 KB, aunque el contrato indica 10 MiB. La interfaz valida el máximo contractual (10 MB) y, si el servidor responde 413, explica el rechazo. Solución en el backend: elevar el límite de `express.json` en `main.ts` (o aceptar `multipart/form-data`).
+- **Límite de cuerpo JSON** (resuelto el 2026-10-23): el servidor rechazaba con 413 cualquier cuerpo de más de 100 KB, de modo que solo cabían archivos de ~75 KB aunque el contrato admite 10 MiB. Ahora la carga de documentos (`/api/cases/:caseId/documents`) acepta hasta 15 MB de JSON (un archivo de 10 MiB en base64 pesa ~13,4 MB) y el resto de la API mantiene 100 KB. Verificado contra la API real: 200 KB y 13 MB llegan a la autenticación (401) y 16 MB responde 413.
 
 ## Convenciones de la interfaz
 

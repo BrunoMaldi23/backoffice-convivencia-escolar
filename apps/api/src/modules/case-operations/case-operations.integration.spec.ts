@@ -103,4 +103,17 @@ describe('Operación de expedientes HTTP con PostgreSQL', () => {
     await agent.delete(`/api/cases/${closed.id}/reports/${old.id}`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1 }).expect(409);
     await db.caseReport.delete({ where: { id: old.id } }); await db.caseEvent.deleteMany({ where: { caseId: closed.id } }); await db.case.delete({ where: { id: closed.id } });
   });
+
+  it('solo acepta enlaces HTTPS de OneDrive o SharePoint como evidencia audiovisual', async () => {
+    const link = (externalUrl: string) => agent.post(`/api/cases/${caseId}/documents`).set('X-CSRF-Token', csrf).send({ kind: 'EVIDENCIA', originalFilename: 'Video de prueba', externalUrl });
+    await link('http://colegio.sharepoint.com/:v:/s/Convivencia/Ejemplo').expect(400);
+    await link('https://sitio-externo.example.com/video.mp4').expect(400);
+    await link('https://colegio.sharepoint.com.sitio-externo.example.com/video').expect(400);
+    await link('no es un enlace').expect(400);
+    const sharepoint = await link('https://colegio-my.sharepoint.com/:v:/g/personal/convivencia/EjemploDeVideo').expect(201);
+    const short = await link('https://1drv.ms/v/s!EjemploDeVideo').expect(201);
+    expect(sharepoint.body.externalUrl).toContain('sharepoint.com'); expect(short.body.externalUrl).toContain('1drv.ms');
+    await agent.delete(`/api/cases/${caseId}/documents/${sharepoint.body.id}`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1 }).expect(200);
+    await agent.delete(`/api/cases/${caseId}/documents/${short.body.id}`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1 }).expect(200);
+  });
 });

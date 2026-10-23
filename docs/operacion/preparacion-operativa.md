@@ -17,6 +17,17 @@ La plataforma está validada mediante build, lint y pruebas automatizadas. Esta 
 
 En desarrollo, los correos se reciben en Mailpit y no llegan a Gmail ni Outlook reales. Antes de habilitar personas reales se debe configurar el SMTP institucional, probar invitación, reenvío, recuperación de contraseña y rebote, y verificar el dominio remitente con el equipo de TI. No registre contraseñas ni tokens en actas de prueba.
 
+Variables (en `.env`, nunca en el repositorio; los valores de ejemplo están en `.env.example`):
+
+| Variable | Uso |
+| --- | --- |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE` | Servidor SMTP. Puerto 587 con `MAIL_SECURE=false` (STARTTLS) o 465 con `MAIL_SECURE=true`. En producción se exige TLS. |
+| `MAIL_USER`, `MAIL_PASSWORD` | Cuenta de envío. Si se indica el usuario, la contraseña es obligatoria; ambas vacías envían sin autenticación (solo Mailpit o un relé autorizado). Google Workspace requiere una contraseña de aplicación; Microsoft 365 puede exigir SMTP autenticado habilitado para la cuenta. |
+| `MAIL_FROM` | Remitente autorizado para esa cuenta. |
+| `WEB_ORIGIN` | Dirección pública del sistema: es la que aparece en el enlace del correo. |
+
+Después de cambiar el `.env`, recree el contenedor (`docker compose up -d api`; un simple reinicio no relee las variables) y pruebe una invitación con una cuenta de prueba. Pida a TI que configure SPF, DKIM y DMARC del dominio remitente para que los correos no lleguen a spam.
+
 ## Respaldo y recuperación
 
 Defina un respaldo cifrado de base de datos y de archivos privados. Una copia no es suficiente: realice y documente una restauración en un entorno aislado, verificando que el acceso contextual continúe funcionando. No elimine volúmenes para simular una restauración.

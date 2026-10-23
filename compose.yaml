@@ -30,6 +30,8 @@ services:
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       SESSION_LAST_SEEN_UPDATE_MINUTES: ${SESSION_LAST_SEEN_UPDATE_MINUTES:-15}
       MAIL_FROM: ${MAIL_FROM:-no-reply@convivencia.example.com}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-convivencia_app}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:-convivencia}?schema=public
       SHADOW_DATABASE_URL: postgresql://${POSTGRES_USER:-convivencia_app}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}@db:5432/convivencia_shadow?schema=public
     ports: ["3000:3000"]
