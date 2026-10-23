@@ -37,6 +37,8 @@ model User {
   caseAccessGrantsCreated CaseAccessGrant[] @relation("CaseAccessGrantActor")
   caseReportsCreated CaseReport[] @relation("CaseReportCreator")
   caseParticipantLinks CaseParticipant[] @relation("CaseParticipantLinker")
+  interviewsConducted Interview[] @relation("InterviewInterviewer")
+  interviewCorrections InterviewCorrection[] @relation("InterviewCorrectionActor")
   @@map("users")
 }
 
@@ -69,6 +71,14 @@ enum CaseEventType {
   REPORT_UPDATED
   PARTICIPANT_LINKED
   PARTICIPANT_UNLINKED
+  INTERVIEW_CREATED
+  INTERVIEW_FINALIZED
+  INTERVIEW_CORRECTED
+}
+
+enum InterviewStatus {
+  BORRADOR
+  FINALIZADA
 }
 
 enum ParticipantKind {
@@ -153,10 +163,44 @@ model Case {
   accessGrants CaseAccessGrant[]
   reports CaseReport[]
   participants CaseParticipant[]
+  interviews Interview[]
   @@unique([establishmentId, folio])
   @@index([establishmentId, status, updatedAt])
   @@index([establishmentId, responsibleUserId])
   @@map("cases")
+}
+
+model Interview {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  interviewerUserId String @map("interviewer_user_id")
+  occurredAt DateTime @map("occurred_at")
+  modalityCode String @map("modality_code")
+  summary String
+  restrictedNotes String? @map("restricted_notes")
+  agreements String?
+  status InterviewStatus @default(BORRADOR)
+  version Int @default(1)
+  finalizedAt DateTime? @map("finalized_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  interviewer User @relation("InterviewInterviewer", fields: [interviewerUserId], references: [id], onDelete: Restrict)
+  corrections InterviewCorrection[]
+  @@index([caseId, occurredAt])
+  @@map("interviews")
+}
+model InterviewCorrection {
+  id String @id @default(uuid())
+  interviewId String @map("interview_id")
+  actorUserId String @map("actor_user_id")
+  reason String
+  previousVersion Int @map("previous_version")
+  createdAt DateTime @default(now()) @map("created_at")
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  actor User @relation("InterviewCorrectionActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  @@index([interviewId, createdAt])
+  @@map("interview_corrections")
 }
 
 model CaseReport {

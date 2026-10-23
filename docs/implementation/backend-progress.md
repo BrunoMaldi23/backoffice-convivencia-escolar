@@ -10,10 +10,12 @@ Actualizado: 2026-10-22.
 ## En curso
 
 - Bloque 3: implementados el módulo `reports-participants`, DTOs, rutas protegidas y eventos/auditoría transaccionales. Faltan pruebas HTTP propias del módulo para considerar el bloque terminado.
+- Bloque 4: persistencia de entrevistas incorporada; faltan módulo NestJS, DTOs, endpoints y pruebas.
 
 ## Migraciones
 
 - `20261022230000_reports_participants`: aplicada en `convivencia_test`; no aplicada fuera de ese entorno por esta ejecución.
+- `20261023010000_interviews`: aplicada exclusivamente en `convivencia_test`.
 
 ## Validaciones recientes
 
@@ -28,4 +30,4 @@ Actualizado: 2026-10-22.
 
 ## Próxima tarea exacta
 
-Crear pruebas HTTP con PostgreSQL para `reports-participants`, incluido aislamiento institucional y rollback; después iniciar el módulo de entrevistas.
+Implementar el módulo NestJS `interviews` sobre las tablas ya migradas; después crear la suite HTTP PostgreSQL conjunta para Bloques 3 y 4.
