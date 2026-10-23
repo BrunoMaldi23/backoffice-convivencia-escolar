@@ -18,7 +18,7 @@ export class InstitutionsService {
       ...(write ? { accessLevel: CaseAccessLevel.WRITE } : {})
     };
     return {
-      establishment: { memberships: { some: { userId, isActive: true } } },
+      establishment: { isActive: true, memberships: { some: { userId, isActive: true } } },
       OR: [{ createdByUserId: userId }, { responsibleUserId: userId }, { accessGrants: { some: grant } }]
     };
   }
