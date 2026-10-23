@@ -48,6 +48,9 @@ model User {
   tasksCreated CaseTask[] @relation("CaseTaskCreator")
   tasksAssigned CaseTask[] @relation("CaseTaskAssignee")
   notifications Notification[] @relation("NotificationRecipient")
+  staffMember StaffMember?
+  summonsCreated CaseSummons[] @relation("CaseSummonsCreator")
+  referralsCreated CaseReferral[] @relation("CaseReferralCreator")
   @@map("users")
 }
 
@@ -91,6 +94,10 @@ enum CaseEventType {
   TASK_CREATED
   TASK_COMPLETED
   NOTIFICATION_CREATED
+  SUMMONS_CREATED
+  SUMMONS_UPDATED
+  REFERRAL_CREATED
+  REFERRAL_UPDATED
 }
 
 enum InterviewStatus {
@@ -108,6 +115,18 @@ enum ParticipantKind {
 enum DocumentKind {
   DOCUMENTO
   EVIDENCIA
+}
+enum SummonsStatus {
+  PROGRAMADA
+  REALIZADA
+  NO_ASISTIO
+  CANCELADA
+}
+enum ReferralStatus {
+  PENDIENTE
+  ENVIADA
+  CON_RESPUESTA
+  CERRADA
 }
 enum ProtocolVersionStatus {
   BORRADOR
@@ -140,6 +159,10 @@ model Establishment {
   reports CaseReport[]
   participants Participant[]
   protocolTemplates ProtocolTemplate[]
+  courses Course[]
+  students Student[]
+  guardians Guardian[]
+  staffMembers StaffMember[]
   @@map("establishments")
 }
 
@@ -208,6 +231,8 @@ model Case {
   followUps CaseFollowUp[]
   tasks CaseTask[]
   notifications Notification[]
+  summons CaseSummons[]
+  referrals CaseReferral[]
   @@unique([establishmentId, folio])
   @@index([establishmentId, status, updatedAt])
   @@index([establishmentId, responsibleUserId])
@@ -412,12 +437,22 @@ model Participant {
   establishmentId String @map("establishment_id")
   kind ParticipantKind
   referenceLabel String @map("reference_label")
+  studentId String? @map("student_id")
+  guardianId String? @map("guardian_id")
+  staffMemberId String? @map("staff_member_id")
   isActive Boolean @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  guardian Guardian? @relation(fields: [guardianId], references: [id], onDelete: Restrict)
+  staffMember StaffMember? @relation(fields: [staffMemberId], references: [id], onDelete: Restrict)
   caseLinks CaseParticipant[]
+  summons CaseSummons[]
   @@index([establishmentId, kind, isActive])
+  @@index([studentId])
+  @@index([guardianId])
+  @@index([staffMemberId])
   @@map("participants")
 }
 
@@ -563,4 +598,142 @@ model SecurityAudit {
   @@index([actorUserId,createdAt])
   @@index([targetType,targetId,createdAt])
   @@map("security_audits")
+}
+
+model Course {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  name String
+  level String?
+  academicYear Int @map("academic_year")
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  students Student[]
+  @@unique([establishmentId, academicYear, name])
+  @@map("courses")
+}
+
+model Student {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  rut String
+  firstNames String @map("first_names")
+  lastNames String @map("last_names")
+  birthDate DateTime? @map("birth_date") @db.Date
+  courseId String? @map("course_id")
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  guardianLinks StudentGuardian[]
+  participants Participant[]
+  @@unique([establishmentId, rut])
+  @@index([establishmentId, courseId, isActive])
+  @@index([establishmentId, lastNames])
+  @@map("students")
+}
+
+model Guardian {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  rut String?
+  firstNames String @map("first_names")
+  lastNames String @map("last_names")
+  email String?
+  phone String?
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  studentLinks StudentGuardian[]
+  participants Participant[]
+  @@unique([establishmentId, rut])
+  @@index([establishmentId, lastNames])
+  @@map("guardians")
+}
+
+model StudentGuardian {
+  studentId String @map("student_id")
+  guardianId String @map("guardian_id")
+  relationship String
+  isPrimary Boolean @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  @@id([studentId, guardianId])
+  @@index([guardianId])
+  @@map("student_guardians")
+}
+
+model StaffMember {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  rut String?
+  firstNames String @map("first_names")
+  lastNames String @map("last_names")
+  position String
+  email String?
+  phone String?
+  userId String? @unique @map("user_id")
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  participants Participant[]
+  @@unique([establishmentId, rut])
+  @@index([establishmentId, lastNames])
+  @@map("staff_members")
+}
+
+model CaseSummons {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  participantId String? @map("participant_id")
+  recipientLabel String @map("recipient_label")
+  scheduledAt DateTime @map("scheduled_at")
+  location String
+  reason String
+  status SummonsStatus @default(PROGRAMADA)
+  outcomeNote String? @map("outcome_note")
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  participant Participant? @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("CaseSummonsCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@map("case_summons")
+}
+
+model CaseReferral {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  typeCode String @map("type_code")
+  institutionName String @map("institution_name")
+  reason String
+  status ReferralStatus @default(PENDIENTE)
+  contactName String? @map("contact_name")
+  sentAt DateTime? @map("sent_at")
+  responseNote String? @map("response_note")
+  responseAt DateTime? @map("response_at")
+  closedAt DateTime? @map("closed_at")
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("CaseReferralCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, status])
+  @@index([status, createdAt])
+  @@map("case_referrals")
 }

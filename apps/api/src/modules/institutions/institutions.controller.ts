@@ -19,6 +19,9 @@ class GrantDto { @IsUUID() userId!: string; @IsEnum(CaseAccessLevel) accessLevel
 export class InstitutionsController {
   constructor(private readonly institutions: InstitutionsService) {}
   @Get('establishments') @RequirePermissions('institutions.read') @ApiOperation({ summary: 'Lista establecimientos institucionales' }) list() { return this.institutions.list(); }
+  @Get('me/establishments') @ApiOperation({ summary: 'Establecimientos de los que la persona autenticada es miembro activa' }) mine(@Req() req: AdminRequest) { return this.institutions.mine(req.actorId!); }
+  @Get('establishments/:id/stages') @ApiOperation({ summary: 'Etapas de expediente del establecimiento (miembros o administración)' }) stages(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string) { return this.institutions.listStages(req.actorId!, id); }
+  @Get('establishments/:id/members') @ApiOperation({ summary: 'Personas con cuenta activa en el establecimiento (miembros o administración)' }) members(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string) { return this.institutions.members(req.actorId!, id); }
   @Post('establishments') @RequirePermissions('institutions.manage') @ApiOperation({ summary: 'Crea establecimiento sin registro público' }) create(@Req() req: AdminRequest, @Body() dto: CreateEstablishmentDto) { return this.institutions.create(req.actorId!, dto, context(req)); }
   @Patch('establishments/:id') @RequirePermissions('institutions.manage') update(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEstablishmentDto) { return this.institutions.update(req.actorId!, id, dto, context(req)); }
   @Post('establishments/:id/memberships') @RequirePermissions('institutions.manage') membership(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: MembershipDto) { return this.institutions.membership(req.actorId!, id, dto.userId, dto.isActive, context(req)); }

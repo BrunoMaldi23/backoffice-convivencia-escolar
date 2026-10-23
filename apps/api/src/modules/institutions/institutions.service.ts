@@ -8,6 +8,15 @@ export class InstitutionsService {
   constructor(private readonly db: DatabaseService, private readonly audit: SecurityAuditService) {}
 
   async list() { return this.db.establishment.findMany({ select: { id: true, code: true, name: true, institutionalIdentifier: true, isActive: true, createdAt: true, updatedAt: true }, orderBy: { name: 'asc' } }); }
+  /** Establecimientos en los que la persona es miembro activa; no exige permisos administrativos. */
+  async mine(userId: string) { return this.db.establishment.findMany({ where: { isActive: true, memberships: { some: { userId, isActive: true } } }, select: { id: true, code: true, name: true, institutionalIdentifier: true, isActive: true, createdAt: true, updatedAt: true }, orderBy: { name: 'asc' } }); }
+  async listStages(userId: string, establishmentId: string) { await this.requireReadAccess(userId, establishmentId); return this.db.caseStage.findMany({ where: { establishmentId }, orderBy: { displayOrder: 'asc' } }); }
+  /** Directorio mínimo de personas con cuenta activa en el establecimiento (para elegir responsables). */
+  async members(userId: string, establishmentId: string) {
+    await this.requireReadAccess(userId, establishmentId);
+    const rows = await this.db.establishmentMembership.findMany({ where: { establishmentId, isActive: true, user: { isActive: true } }, select: { user: { select: { id: true, displayName: true, roles: { select: { role: { select: { name: true } } } } } } }, orderBy: { user: { displayName: 'asc' } } });
+    return rows.map(({ user }) => ({ id: user.id, displayName: user.displayName, roles: user.roles.map(({ role }) => role.name) }));
+  }
   async create(actorId: string, data: { code: string; name: string; institutionalIdentifier?: string }, context: AuditRequestContext) {
     try { return await this.db.$transaction(async (tx) => {
       const record = await tx.establishment.create({ data: { code: data.code.trim().toUpperCase(), name: data.name.trim(), institutionalIdentifier: data.institutionalIdentifier?.trim() || null } });
@@ -53,6 +62,13 @@ export class InstitutionsService {
     const record = await tx.case.findFirst({ where: { id: caseId, ...this.caseAccessWhere(userId, write) } });
     if (!record) throw new NotFoundException('Expediente no disponible');
     return record;
+  }
+  /** Lectura permitida a quien es miembro, o a quien tiene `institutions.read` (administración). */
+  private async requireReadAccess(userId: string, establishmentId: string) {
+    const member = await this.db.establishmentMembership.findFirst({ where: { userId, establishmentId, isActive: true, establishment: { isActive: true } }, select: { userId: true } });
+    if (member) return;
+    const reader = await this.db.rolePermission.findFirst({ where: { permission: { code: 'institutions.read' }, role: { users: { some: { userId } } } }, select: { roleId: true } });
+    if (!reader || !await this.db.establishment.findUnique({ where: { id: establishmentId }, select: { id: true } })) throw new NotFoundException('Establecimiento no disponible');
   }
   private async activeEstablishment(tx: Prisma.TransactionClient, id: string) { const item = await tx.establishment.findFirst({ where: { id, isActive: true } }); if (!item) throw new NotFoundException('Establecimiento no disponible'); return item; }
   private duplicate(error: unknown) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('Registro institucional duplicado'); }

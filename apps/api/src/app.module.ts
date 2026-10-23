@@ -15,4 +15,6 @@ import { CasesModule } from './modules/cases/cases.module';
 import { ReportsParticipantsModule } from './modules/reports-participants/reports-participants.module';
 import { InterviewsModule } from './modules/interviews/interviews.module';
 import { CaseOperationsModule } from './modules/case-operations/case-operations.module';
-@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule, InstitutionsModule, CasesModule, ReportsParticipantsModule, InterviewsModule, CaseOperationsModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}
+import { CommunityModule } from './modules/community/community.module';
+import { SummonsReferralsModule } from './modules/summons-referrals/summons-referrals.module';
+@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule, InstitutionsModule, CasesModule, ReportsParticipantsModule, InterviewsModule, CaseOperationsModule, CommunityModule, SummonsReferralsModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}
