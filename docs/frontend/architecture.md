@@ -1,71 +1,64 @@
 # Arquitectura del frontend
 
-`apps/web` es una SPA en Vue 3 con Vite, TypeScript estricto, PrimeVue 4 (preset Aura), Tailwind CSS 4, Vue Router, TanStack Vue Query y Axios. La Fase 1B construye la interfaz completa sin conectarla todavía al backend: cada pantalla está lista para recibir datos reales y, mientras tanto, muestra el estado **Integración pendiente** en lugar de simular respuestas.
+`apps/web` es una SPA en Vue 3 con Vite, TypeScript estricto, PrimeVue 4 (preset Aura), Tailwind CSS 4, Vue Router, TanStack Vue Query y Axios, conectada a la API real del backend NestJS. El detalle de endpoints, pendientes y problemas del backend está en [api-integration.md](api-integration.md).
 
 ## Estructura
 
 ```text
 apps/web/src/
-├── assets/              logo.png (pendiente de copiar, ver "Recursos institucionales")
+├── assets/              logo.png (original del colegio, sin modificar)
 ├── components/          componentes reutilizables y tipos de configuración (types.ts)
-├── composables/         useResource, useSession, useSidebar, useHealth
+├── composables/         consultas y mutaciones con Vue Query (useCases, useCaseContent, useAdmin, useScoped, useSession…)
 ├── config/preview.ts    bandera del modo de previsualización
-├── layouts/             AppLayout, AuthLayout, sidebar, header, migas, menú de usuario
-├── lib/                 formato de fechas, RUT, validación, errores, estados, roles, auditoría
-├── modules/<dominio>/   vistas de ruta y configuración (`*.config.ts`) por dominio
-├── preview/             datos sintéticos (solo modo ui-preview)
+├── layouts/             AppLayout, AuthLayout, sidebar, header, migas, notificaciones, menú de usuario
+├── lib/                 formato, RUT, validación, errores, estados, catálogos, roles, auditoría, indicadores, acceso
+├── modules/<dominio>/   vistas de ruta y sus pestañas/diálogos por dominio
+├── preview/fakeApi.ts   API simulada (solo `dev:preview` y pruebas)
 ├── router/              rutas, navegación lateral y guardia de sesión
-├── services/            auth.ts, resources.ts, integration.ts, api.ts
-├── types/models.ts      modelos de presentación y mapa de recursos
+├── services/            clientes HTTP tipados: api.ts, auth.ts, admin.ts, cases.ts, caseOperations.ts
+├── types/api.ts         tipos de la API (contratos del backend)
 ├── theme.ts             preset institucional de PrimeVue y textos es-CL
 └── style.css            capas CSS, fuente y ajustes globales
 ```
 
-Se mantuvo `src/modules/` de la Fase 0 (y de la skill `convivencia-vue-ui`) en lugar de crear `features/`.
+Se mantuvo `src/modules/` (y no `features/`) por coherencia con la skill `convivencia-vue-ui`. Pinia no se instaló: el estado del servidor vive en Vue Query y el de interfaz (sidebar, establecimiento elegido) en composables, sin necesidad de otra dependencia.
 
 ## Flujo de datos
 
 ```text
-services/*.ts  →  composables/use*.ts (TanStack Query)  →  vista
+services/*.ts (funciones HTTP tipadas)  →  composables/use*.ts (Vue Query)  →  vista
 ```
 
-- `services/resources.ts` declara el endpoint de cada recurso en `ENDPOINTS` (`null` si el backend aún no lo define) y expone `fetchResource`, `fetchResourceItem` y `submitResource`.
-- Hoy todas esas funciones llaman a `pendingIntegration()`, que lanza `IntegrationPendingError` con el endpoint previsto. Ninguna escritura informa éxito sin respuesta del servidor.
-- `composables/useResource.ts` decide la fuente: datos sintéticos en previsualización o el servicio real en cualquier otro caso.
-- `components/QueryState.vue` resuelve los cuatro estados (cargando, error o integración pendiente, vacío y con datos) para todas las vistas.
-- Los modelos de `types/models.ts` son **de presentación**, no contratos. Al conectar cada recurso, el servicio adaptará la respuesta del backend a esos modelos, o se reemplazarán por tipos publicados en `packages/shared`.
+- **Servicios**: funciones puras sobre la instancia `api` (Axios con cookies y CSRF). No guardan estado.
+- **Consultas**: claves `['cases', …]`, `['case', id, <parte>]`, `['users', …]`, `['scoped', <tipo>]`, etc. Cada pestaña del expediente consulta su propio endpoint solo cuando se abre.
+- **Mutaciones** (`useApiMutation`): al terminar bien invalidan por prefijo (`caseScope(id)` invalida el expediente, los listados, los agregados y las notificaciones). Nunca se actualizan datos "a ojo": la pantalla vuelve a leer del servidor.
+- **Estados**: `QueryState` resuelve cargando, error (con "Reintentar"; sin botón ante 403), vacío y con datos.
+- **Errores de escritura**: `MutationDialog` y `ConfirmActionDialog` mantienen el diálogo abierto y muestran el motivo real; un 409 ofrece "Recargar datos".
+- **Vistas globales** (`useScoped`): la API solo entrega tareas, medidas, seguimientos, entrevistas, denuncias y documentos por expediente. Se componen consultando los expedientes autorizados más recientes (60 con contenido, hasta 300 para el listado) con 5 llamadas simultáneas, y cada vista informa su base (`ScopeNotice`).
+- **Indicadores** (`lib/metrics.ts`): funciones puras sobre datos ya consultados; no existen estadísticas inventadas ni endpoints supuestos.
 
-## Autenticación y sesión (integrada con la API real)
+## Autenticación y sesión
 
 Contratos: [auth-contract](../api/auth-contract.md), [password-recovery-contract](../api/password-recovery-contract.md) y [frontend-integration-guide](../api/frontend-integration-guide.md).
 
 - **Cliente HTTP** (`services/api.ts`): Axios con `withCredentials: true`. La sesión es la cookie HttpOnly `bce_session`; el frontend no lee ni guarda tokens, y no usa `localStorage` ni `sessionStorage`.
-- **CSRF**: las escrituras autenticadas (todo `POST`/`PATCH` salvo `/auth/login`, `forgot-password`, `reset-password` y `accept-invitation`) obtienen el token de `GET /auth/csrf` y lo envían en `X-CSRF-Token`. El token vive solo en memoria del módulo; ante un 403 en una escritura se pide uno nuevo y se reintenta una sola vez.
-- **Ingreso** (`services/auth.ts`): `POST /auth/login` y luego `GET /auth/me`. La segunda llamada confirma que el navegador guardó la cookie y entrega el usuario; si responde 401, se informa que la sesión no quedó establecida (por ejemplo, cookies bloqueadas).
-- **Persistencia tras recargar**: la guardia del router consulta `GET /auth/me` (`ensureSession`) y reutiliza el resultado en memoria (TanStack Query). Un 401 es "sin sesión"; cualquier otro fallo (API caída, 5xx) no se confunde con sesión cerrada y lleva a `/login?motivo=servidor`.
+- **CSRF**: las escrituras autenticadas (todo `POST`/`PATCH` salvo `/auth/login`, `forgot-password`, `reset-password` y `accept-invitation`) obtienen el token de `GET /auth/csrf` y lo envían en `X-CSRF-Token`. El token vive solo en memoria; ante un 403 en una escritura se pide uno nuevo y se reintenta una sola vez.
+- **Ingreso**: `POST /auth/login` y luego `GET /auth/me`; si `/auth/me` responde 401, se informa que la sesión no quedó establecida (por ejemplo, cookies bloqueadas).
+- **Persistencia tras recargar**: la guardia consulta `GET /auth/me` (`ensureSession`) y reutiliza el resultado en memoria. Un 401 es "sin sesión"; un fallo del servidor lleva a `/login?motivo=servidor`.
 - **Rutas**: las privadas exigen sesión y redirigen a `/login?redirect=<ruta>`; quien ya tiene sesión que entra a `/login` vuelve al panel. `lib/redirect.ts` solo acepta destinos internos.
-- **Permisos**: `/auth/me` solo entrega roles (informativos). El menú usa `lib/access.ts` como indicio, con la matriz inicial documentada, pero nunca concede acceso: el servidor responde 403 y `ErrorState` lo muestra como "Acceso denegado" sin botón de reintento.
-- **Sesión caducada o revocada**: cualquier llamada autenticada que responda 401 limpia por completo el estado en memoria (`clearSession`) y lleva a `/sesion-expirada`.
-- **Cierre de sesión**: `POST /auth/logout` con CSRF y limpieza total de la caché local; un 401 se considera sesión ya cerrada.
-- **Recuperación**: `forgot-password`, `reset-password` y `accept-invitation` usan los endpoints reales. El código se pega en el formulario y viaja en el cuerpo del `POST`, nunca en la URL; los mensajes distinguen código inválido o vencido (400/401), límite de intentos (429) y fallos del servidor.
+- **Permisos**: `/auth/me` solo entrega roles. El menú y los botones usan `lib/access.ts` (matriz inicial del seed) como indicio; el servidor decide con 403 y la interfaz lo muestra como "Acceso denegado".
+- **Sesión caducada o revocada**: cualquier llamada autenticada que responda 401 limpia por completo el estado en memoria y lleva a `/sesion-expirada`.
+- **Cierre de sesión**: `POST /auth/logout` con CSRF y limpieza total de la caché local.
+- **Recuperación**: el código recibido por correo se pega en el formulario y viaja en el cuerpo del `POST`, nunca en la URL.
 
 ## Modo de previsualización
 
-Sirve para revisar el diseño sin backend ni sesión.
-
 ```powershell
-pnpm --filter @backoffice/web dev:preview   # Vite en modo ui-preview
+pnpm --filter @backoffice/web dev:preview   # Vite en modo ui-preview, API simulada
 ```
 
-- `vite.config.ts` define `__UI_PREVIEW__` como `true` solo cuando `command === 'serve'` y `mode === 'ui-preview'`. En `vite build` es el literal `false`.
-- `preview/index.ts` y la guardia del router usan `__UI_PREVIEW__` directamente, por lo que el `import()` de `preview/demo-data.ts` y la omisión de la guardia se eliminan del paquete de producción. Se verificó que `dist/` no contiene el chunk `demo-data` ni sus textos.
-- En previsualización: no hay sesión (el menú dice "Sin sesión"), las rutas privadas se abren, los ítems con permiso muestran un candado, un aviso ámbar recorre la parte superior y cada vista con datos lleva la insignia "Datos de demostración".
-- Los datos sintéticos usan marcadores ("Estudiante demo 07"), correos `@demo.invalid` y no incluyen RUT ni contactos reales.
+`vite.config.ts` define `__UI_PREVIEW__` como `true` solo con `vite serve --mode ui-preview`; en `vite build` es el literal `false`, por lo que el `import()` de `preview/fakeApi.ts` y sus datos se eliminan del paquete de producción (verificado en `dist/`). El simulador replica el contrato real y la sesión es sintética: no hay cuentas ni contraseñas, y no se toca la base local.
 
-## Integración posterior con Codex
+## Pruebas
 
-1. Revisar `docs/api/*.md` vigentes y el Swagger local.
-2. (Hecho) `services/api.ts` ya envía credenciales, gestiona CSRF y avisa ante 401.
-3. Reemplazar cada `pendingIntegration()` de `services/resources.ts` por la llamada real y adaptar la respuesta al modelo de `types/models.ts`, empezando por usuarios, roles y auditoría.
-4. Mover filtrado, búsqueda y paginación de `ResourceListPage` a parámetros de servidor (`page`, `limit`, `search`, `role`, `active`).
-5. Resolver las observaciones de contrato listadas en `docs/phase-1b-report.md`.
+`pnpm --filter @backoffice/web test` (Vitest, 62 pruebas): validaciones, RUT, fechas, errores, indicadores, máquina de estados, capa HTTP y CSRF, y flujos de servicios contra el simulador (`tests/api-flows.spec.ts`). Esas pruebas validan la lógica del frontend; no sustituyen una prueba con el backend real.

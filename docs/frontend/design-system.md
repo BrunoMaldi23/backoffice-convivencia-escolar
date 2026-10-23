@@ -35,19 +35,20 @@ El preset de PrimeVue (`src/theme.ts`) mapea su primario a la escala sky, fija e
 | Componente | Propósito |
 | --- | --- |
 | `PageHeader` | Título `h1`, descripción, insignias, acciones y enlace de retorno |
-| `SectionCard` | Superficie con título y acciones; `flush` para tablas |
+| `SectionCard` | Superficie con título y acciones; `flush` para tablas y `dense` para paneles compactos |
 | `StatCard` | Indicador numérico; muestra "—" si no hay dato (nunca un número inventado) |
 | `StatusBadge` / `PriorityBadge` | Estado con ícono + texto; prioridad con barras de nivel + texto |
-| `QueryState`, `LoadingState`, `ErrorState`, `EmptyState` | Los cuatro estados de datos |
+| `QueryState`, `LoadingState`, `ErrorState`, `EmptyState` | Los cuatro estados de datos (el error 403 no ofrece reintento) |
 | `SearchToolbar` | Búsqueda y filtros en una sola fila |
-| `ResourceTable`, `ResourceListPage` | Tablas con orden, paginación y columnas adaptativas |
-| `ResourceForm`, `FormField` | Formularios declarativos con validación y resumen de errores |
-| `ResourceDetailShell`, `DetailPanel`, `RelatedTable`, `Timeline` | Fichas de detalle |
-| `ConfirmActionDialog`, `PendingNotice` | Confirmaciones y resultado honesto de acciones |
+| `AppTable` | Tabla sobre PrimeVue DataTable: modo cliente (orden y paginación locales) o modo servidor (`total`, `page`, `limit`), columnas adaptativas y celdas por slot |
+| `MutationDialog`, `ConfirmActionDialog`, `ApiErrorMessage` | Escrituras con diálogo que permanece abierto ante errores; un 409 ofrece "Recargar datos" |
+| `FormField`, `IconInput`, `UserSelect` | Campos accesibles; selector de persona con lista (con `users.read`) o identificador |
+| `DetailPanel`, `Timeline` | Fichas de detalle y líneas de tiempo |
+| `ScopeNotice` | Indica cuántos expedientes revisó una vista global |
 | `BarChart` | Barras de una serie, con tooltip, foco de teclado y vista de tabla |
-| `InstitutionLogo`, `AppIcon`, `PreviewBadge` | Identidad, iconografía lineal propia y marca de demostración |
+| `InstitutionLogo`, `AppIcon` | Identidad (completo sobre azul, escudo sobre fondo claro) e iconografía lineal propia |
 
-`ModulePlaceholder`, `PaginationControls`, `FilterPanel` y un `ConfirmDialog` propio no se crearon: la paginación y los diálogos los cubre PrimeVue, y los filtros viven en `SearchToolbar`.
+Los formularios se escriben explícitamente en cada vista con `FormField` y los controles de PrimeVue; ya no existe un generador de formularios genérico.
 
 ## Iconografía
 
