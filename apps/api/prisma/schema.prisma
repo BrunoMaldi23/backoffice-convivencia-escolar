@@ -27,7 +27,173 @@ model User {
   roles UserRole[]
   sessions Session[]
   resetTokens PasswordResetToken[]
+  establishmentMemberships EstablishmentMembership[]
+  createdCases Case[] @relation("CaseCreator")
+  responsibleCases Case[] @relation("CaseResponsible")
+  caseAssignments CaseAssignment[] @relation("CaseAssignmentUser")
+  caseAssignmentsCreated CaseAssignment[] @relation("CaseAssignmentActor")
+  caseEvents CaseEvent[] @relation("CaseEventActor")
+  caseAccessGrants CaseAccessGrant[] @relation("CaseAccessUser")
+  caseAccessGrantsCreated CaseAccessGrant[] @relation("CaseAccessGrantActor")
   @@map("users")
+}
+
+enum CaseStatus {
+  ABIERTO
+  EN_EVALUACION
+  EN_PROCESO
+  PAUSADO
+  RESUELTO
+  CERRADO
+}
+
+enum CaseAccessLevel {
+  READ
+  WRITE
+}
+
+enum CaseEventType {
+  CASE_CREATED
+  CASE_UPDATED
+  CASE_ASSIGNED
+  CASE_STAGE_CHANGED
+  CASE_TRANSITIONED
+  CASE_PAUSED
+  CASE_RESUMED
+  CASE_RESOLVED
+  CASE_CLOSED
+  CASE_REOPENED
+}
+
+model Establishment {
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  institutionalIdentifier String? @unique @map("institutional_identifier")
+  isActive Boolean @default(true) @map("is_active")
+  nextCaseSequence Int @default(1) @map("next_case_sequence")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  memberships EstablishmentMembership[]
+  stages CaseStage[]
+  cases Case[]
+  @@map("establishments")
+}
+
+model EstablishmentMembership {
+  establishmentId String @map("establishment_id")
+  userId String @map("user_id")
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([establishmentId, userId])
+  @@index([userId, isActive])
+  @@map("establishment_memberships")
+}
+
+model CaseStage {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  code String
+  name String
+  displayOrder Int @map("display_order")
+  isActive Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  currentCases Case[] @relation("CaseCurrentStage")
+  @@unique([establishmentId, code])
+  @@unique([establishmentId, displayOrder])
+  @@map("case_stages")
+}
+
+model Case {
+  id String @id @default(uuid())
+  establishmentId String @map("establishment_id")
+  folio Int
+  title String
+  initialDescription String @map("initial_description")
+  receivedAt DateTime @map("received_at")
+  categoryCode String @map("category_code")
+  priority String
+  status CaseStatus @default(ABIERTO)
+  currentStageId String? @map("current_stage_id")
+  responsibleUserId String? @map("responsible_user_id")
+  createdByUserId String @map("created_by_user_id")
+  closedAt DateTime? @map("closed_at")
+  closureReason String? @map("closure_reason")
+  nextAction String? @map("next_action")
+  nextActionDueAt DateTime? @map("next_action_due_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  currentStage CaseStage? @relation("CaseCurrentStage", fields: [currentStageId], references: [id], onDelete: Restrict)
+  responsibleUser User? @relation("CaseResponsible", fields: [responsibleUserId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("CaseCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  assignments CaseAssignment[]
+  events CaseEvent[]
+  accessGrants CaseAccessGrant[]
+  @@unique([establishmentId, folio])
+  @@index([establishmentId, status, updatedAt])
+  @@index([establishmentId, responsibleUserId])
+  @@map("cases")
+}
+
+model CaseAssignment {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  userId String @map("user_id")
+  assignedByUserId String @map("assigned_by_user_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  unassignedAt DateTime? @map("unassigned_at")
+  reason String?
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  user User @relation("CaseAssignmentUser", fields: [userId], references: [id], onDelete: Restrict)
+  assignedByUser User @relation("CaseAssignmentActor", fields: [assignedByUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, unassignedAt])
+  @@map("case_assignments")
+}
+
+model CaseEvent {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  actorUserId String? @map("actor_user_id")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  eventType CaseEventType @map("event_type")
+  previousStatus CaseStatus? @map("previous_status")
+  newStatus CaseStatus? @map("new_status")
+  previousStageId String? @map("previous_stage_id")
+  newStageId String? @map("new_stage_id")
+  correlationId String @map("correlation_id")
+  relatedEntityType String? @map("related_entity_type")
+  relatedEntityId String? @map("related_entity_id")
+  metadata Json?
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  actorUser User? @relation("CaseEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  @@index([caseId, occurredAt, id])
+  @@index([correlationId])
+  @@map("case_events")
+}
+
+model CaseAccessGrant {
+  id String @id @default(uuid())
+  caseId String @map("case_id")
+  userId String @map("user_id")
+  accessLevel CaseAccessLevel @map("access_level")
+  grantedByUserId String @map("granted_by_user_id")
+  grantedAt DateTime @default(now()) @map("granted_at")
+  expiresAt DateTime? @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  reason String?
+  case Case @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  user User @relation("CaseAccessUser", fields: [userId], references: [id], onDelete: Restrict)
+  grantedByUser User @relation("CaseAccessGrantActor", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+  @@unique([caseId, userId])
+  @@index([userId, revokedAt, expiresAt])
+  @@map("case_access_grants")
 }
 model Role {
   id String @id @default(uuid())
