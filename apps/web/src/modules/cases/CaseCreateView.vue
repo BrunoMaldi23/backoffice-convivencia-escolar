@@ -10,6 +10,7 @@ import Select from 'primevue/select';
 import Textarea from 'primevue/textarea';
 import ApiErrorMessage from '@/components/ApiErrorMessage.vue';
 import FormField from '@/components/FormField.vue';
+import NoEstablishment from '@/components/NoEstablishment.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import SectionCard from '@/components/SectionCard.vue';
 import UserSelect from '@/components/UserSelect.vue';
@@ -90,9 +91,7 @@ async function submit() {
   <div class="max-w-4xl">
     <PageHeader :title="withReport ? 'Registrar denuncia' : 'Nuevo caso'" :description="withReport ? 'Registre la denuncia recibida; se creará el expediente que la contiene.' : 'Registre un caso de convivencia escolar. Los campos con asterisco son obligatorios.'" :back="{ to: withReport ? { name: 'complaints' } : { name: 'cases' }, label: withReport ? 'Volver a denuncias' : 'Volver a casos' }" />
 
-    <Message v-if="!establishment.isPending.value && !establishment.currentId.value" severity="warn" :closable="false" class="mb-5">
-      No se pudo determinar el establecimiento. Su rol no puede consultar los establecimientos y todavía no tiene expedientes a los que deducirlo. Solicite a la administración que le conceda acceso a los datos institucionales.
-    </Message>
+    <NoEstablishment v-if="!establishment.isPending.value && !establishment.currentId.value" class="mb-5" />
 
     <Message v-if="created" severity="warn" :closable="false" class="mb-5" role="status">
       El expediente <strong>{{ formatFolio(created.folio) }}</strong> ya fue creado, pero la denuncia no se pudo registrar. Corrija lo indicado y vuelva a enviar: solo se reintentará la denuncia.

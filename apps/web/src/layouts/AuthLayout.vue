@@ -1,38 +1,57 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router';
 import { isUiPreview } from '@/config/preview';
+import AppIcon from '@/components/AppIcon.vue';
 import InstitutionLogo from '@/components/InstitutionLogo.vue';
 
 /**
- * Pantallas de autenticación en dos columnas. La columna institucional usa el azul del escudo con curvas
- * doradas (el logo trae el nombre del colegio en blanco, por eso necesita fondo oscuro). El formulario va en una
- * tarjeta sobre un fondo azul muy suave. En tablet y móvil la columna izquierda se reduce a una franja superior.
+ * Pantallas de autenticación en dos columnas. La columna institucional es un azul sobrio (el logo trae el nombre del colegio en
+ * blanco, por eso necesita fondo oscuro) con el escudo como marca de agua, un mensaje breve y tres garantías del sistema. El
+ * formulario va en una tarjeta sobre un fondo azul muy suave. En tablet y móvil la columna izquierda se reduce a una franja superior.
  */
+const HIGHLIGHTS = [
+  { icon: 'lock', title: 'Casos confidenciales', text: 'Cada persona ve solo los expedientes que le corresponden.' },
+  { icon: 'history', title: 'Todo queda registrado', text: 'Cambios, entrevistas y decisiones, con fecha y responsable.' },
+  { icon: 'folder', title: 'Un solo lugar de trabajo', text: 'Denuncias, medidas, citaciones y seguimientos en el mismo expediente.' }
+] as const;
 </script>
 
 <template>
   <div class="min-h-dvh bg-white lg:grid lg:grid-cols-12">
     <aside class="relative isolate overflow-hidden bg-brand text-white lg:col-span-5">
-      <div class="absolute inset-0 -z-20 bg-[linear-gradient(135deg,#0a1f63_0%,#0f3190_48%,#2a68cf_100%)]" aria-hidden="true" />
-      <svg class="absolute inset-0 -z-10 hidden h-full w-full lg:block" viewBox="0 0 836 941" preserveAspectRatio="xMidYMid slice" fill="none" aria-hidden="true" focusable="false">
-        <defs>
-          <radialGradient id="auth-glow" cx="85%" cy="8%" r="55%"><stop offset="0" stop-color="#5b97ee" stop-opacity=".55" /><stop offset="1" stop-color="#5b97ee" stop-opacity="0" /></radialGradient>
-          <radialGradient id="auth-glow-2" cx="5%" cy="95%" r="45%"><stop offset="0" stop-color="#3f7be0" stop-opacity=".5" /><stop offset="1" stop-color="#3f7be0" stop-opacity="0" /></radialGradient>
-        </defs>
-        <rect width="836" height="941" fill="url(#auth-glow)" />
-        <rect width="836" height="941" fill="url(#auth-glow-2)" />
-        <path d="M-10 270C30 120 150 20 310 -5" stroke="#d6a21c" stroke-opacity=".75" stroke-width="2" />
-        <path d="M-10 600C90 740 330 790 600 960" stroke="#d6a21c" stroke-opacity=".7" stroke-width="2" />
-        <path d="M836 560C720 640 700 800 560 960" stroke="#7fb0f5" stroke-opacity=".18" stroke-width="1.5" />
-      </svg>
+      <div class="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#0b1c57_0%,#0d2368_100%)]" aria-hidden="true" />
+      <!-- Escudo del colegio como marca de agua: ancla la identidad sin competir con el texto -->
+      <div class="pointer-events-none absolute -bottom-24 -right-28 -z-10 hidden opacity-[0.07] lg:block" aria-hidden="true"><InstitutionLogo variant="emblem" :size="560" /></div>
+      <span class="absolute inset-y-0 left-0 -z-10 hidden w-1 bg-gold lg:block" aria-hidden="true" />
 
-      <div class="mx-auto flex max-w-xl items-center gap-5 px-6 py-5 sm:px-10 lg:min-h-dvh lg:max-w-none lg:flex-col lg:items-start lg:justify-center lg:gap-0 lg:px-14 lg:py-10 xl:px-20">
-        <div class="shrink-0 lg:hidden"><InstitutionLogo :size="60" /></div>
-        <div class="hidden shrink-0 lg:block"><InstitutionLogo :size="112" /></div>
-        <span class="mt-8 hidden h-[3px] w-14 rounded-full bg-gold lg:block" aria-hidden="true" />
-        <div class="min-w-0 lg:mt-8">
-          <p class="text-base font-semibold leading-snug lg:max-w-md lg:text-[2.25rem] lg:font-bold lg:leading-[1.12] lg:tracking-tight">Panel de Convivencia Escolar</p>
-          <p class="mt-0.5 text-sm text-sky-100 lg:mt-3 lg:text-lg lg:text-sky-100/90">Sistema interno de gestión institucional</p>
+      <!-- Tablet y móvil: franja superior compacta -->
+      <div class="mx-auto flex max-w-xl items-center gap-5 px-6 py-5 sm:px-10 lg:hidden">
+        <div class="shrink-0"><InstitutionLogo :size="60" /></div>
+        <div class="min-w-0">
+          <p class="text-base font-semibold leading-snug">Panel de Convivencia Escolar</p>
+          <p class="mt-0.5 text-sm text-sky-100">Sistema interno de gestión institucional</p>
+        </div>
+      </div>
+
+      <div class="hidden min-h-dvh flex-col justify-between gap-8 px-14 py-10 lg:flex xl:px-20 xl:py-14">
+        <InstitutionLogo :size="84" />
+
+        <div>
+          <p class="max-w-md text-[2.5rem] font-bold leading-[1.1] tracking-tight xl:text-[2.75rem]">Convivencia escolar, con registro y resguardo.</p>
+          <p class="mt-5 max-w-sm text-[1.0625rem] leading-relaxed text-sky-100/85">Panel interno para llevar los casos del colegio de principio a fin.</p>
+        </div>
+
+        <div>
+          <ul class="hidden max-w-sm space-y-5 [@media(min-height:800px)]:block">
+            <li v-for="item in HIGHLIGHTS" :key="item.title" class="flex items-start gap-4">
+              <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-gold ring-1 ring-white/15"><AppIcon :name="item.icon" :size="18" /></span>
+              <div>
+                <p class="text-[0.9375rem] font-semibold">{{ item.title }}</p>
+                <p class="mt-0.5 text-sm leading-relaxed text-sky-100/80">{{ item.text }}</p>
+              </div>
+            </li>
+          </ul>
+          <p class="border-t border-white/15 pt-5 text-xs text-sky-100/70 [@media(min-height:800px)]:mt-10">Colegio Bautista · Uso exclusivo del personal autorizado</p>
         </div>
       </div>
     </aside>

@@ -9,9 +9,9 @@ import Textarea from 'primevue/textarea';
 import ApiErrorMessage from '@/components/ApiErrorMessage.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
-import EmptyState from '@/components/EmptyState.vue';
 import FormField from '@/components/FormField.vue';
 import MutationDialog from '@/components/MutationDialog.vue';
+import NoEstablishment from '@/components/NoEstablishment.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
@@ -66,9 +66,7 @@ async function submit() {
       </template>
     </PageHeader>
 
-    <div v-if="!establishment.currentId.value && !establishment.isPending.value" class="rounded-xl border border-slate-200 bg-white">
-      <EmptyState icon="building" title="No se pudo determinar el establecimiento" description="Su rol no puede consultar los establecimientos y todavía no tiene expedientes a los que deducirlo." />
-    </div>
+    <NoEstablishment v-if="!establishment.currentId.value && !establishment.isPending.value" />
     <div v-else :class="query.data.value?.length ? '' : 'rounded-xl border border-slate-200 bg-white'">
       <QueryState :data="query.data.value" :is-pending="query.isPending.value || establishment.isPending.value" :error="query.error.value" empty-icon="list-checks" empty-title="No hay protocolos publicados" empty-description="Cree un protocolo y publíquelo para poder aplicarlo a los expedientes." subject="los protocolos" @retry="query.refetch()">
         <template #default="{ data }">
