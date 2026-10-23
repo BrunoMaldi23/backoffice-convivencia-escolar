@@ -37,3 +37,25 @@
   .p-tablist-tab-list { border-color: var(--color-slate-200); }
   .p-tab { font-size: .875rem; font-weight: 500; padding: .75rem 1rem; white-space: nowrap; }
 }
+
+/*
+ * Botones de acción solo con ícono (lápiz, basurero, ver, etc.) de los registros: cada tono tiene su propio color de fondo y
+ * de ícono para que se distingan de un vistazo (editar en azul, anular o eliminar en rojo, neutro en gris azulado). Todos
+ * miden 2 rem, que es un blanco de clic cómodo, y llevan siempre `aria-label` y `title`.
+ */
+@layer components {
+  .p-button.p-button-icon-only.p-button-text { width: 2rem; height: 2rem; padding: 0; border-radius: .625rem; border: 1px solid transparent; transition: background-color .15s, color .15s, border-color .15s; }
+  .p-button.p-button-icon-only.p-button-text.p-button-secondary { background: var(--color-slate-100); color: var(--color-slate-700); }
+  .p-button.p-button-icon-only.p-button-text.p-button-secondary:not(:disabled):hover { background: var(--color-sky-100); color: var(--color-sky-800); border-color: var(--color-sky-200); }
+  .p-button.p-button-icon-only.p-button-text.p-button-danger { background: var(--color-red-50); color: var(--color-red-700); }
+  .p-button.p-button-icon-only.p-button-text.p-button-danger:not(:disabled):hover { background: var(--color-red-100); color: var(--color-red-800); border-color: var(--color-red-200); }
+  .p-button.p-button-icon-only.p-button-text.p-button-success { background: var(--color-emerald-50); color: var(--color-emerald-700); }
+  .p-button.p-button-icon-only.p-button-text.p-button-success:not(:disabled):hover { background: var(--color-emerald-100); color: var(--color-emerald-800); border-color: var(--color-emerald-200); }
+  .p-button.p-button-icon-only.p-button-text:disabled { opacity: .45; }
+}
+
+/* Registros del expediente: tarjetas blancas con filo azul a la izquierda sobre el cuerpo tintado de cada sección. */
+@layer components {
+  .p-tabpanel ul > li.rounded-lg.border { background: #fff; border-left: 3px solid var(--color-sky-600); box-shadow: 0 1px 2px rgb(15 23 42 / 0.05); }
+  .p-tabpanel ul.divide-y { background: #fff; border: 1px solid var(--color-slate-200); border-radius: .75rem; padding: .75rem 1rem; }
+}
