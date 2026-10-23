@@ -95,7 +95,11 @@ model SecurityAudit {
   targetType String @map("target_type")
   targetId String? @map("target_id")
   metadata Json?
+  changes Json?
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
   createdAt DateTime @default(now()) @map("created_at")
   @@index([actorUserId,createdAt])
+  @@index([targetType,targetId,createdAt])
   @@map("security_audits")
 }

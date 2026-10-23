@@ -24,10 +24,17 @@ describe('Auth HTTP integration', () => {
   afterAll(async () => { if (db && email) { await db.session.deleteMany({ where: { user: { email } } }); await db.user.deleteMany({ where: { email } }); } if (app) await app.close(); });
   it('rechaza acceso y DTO inválido', async () => { await request(app.getHttpServer()).get('/api/auth/me').expect(401); await request(app.getHttpServer()).post('/api/auth/login').send({ email: 'invalido', password: 'corta' }).expect(400); });
   it('rechaza credenciales incorrectas e inexistentes', async () => { await request(app.getHttpServer()).post('/api/auth/login').send({ email, password: 'x'.repeat(12) }).expect(401); await request(app.getHttpServer()).post('/api/auth/login').send({ email: 'nadie@test.local', password }).expect(401); });
-  it('crea, consulta y revoca una sesión con CSRF', async () => {
+  it('crea, actualiza actividad y revoca una sesión con CSRF', async () => {
     const agent = request.agent(app.getHttpServer()); const login = await agent.post('/api/auth/login').send({ email, password }).expect(201);
     const cookies = login.headers['set-cookie'] as unknown as string[]; expect(cookies.join(';')).toContain('bce_session='); expect(cookies.join(';')).toContain('HttpOnly'); expect(cookies.join(';')).toContain('SameSite=Strict');
-    expect(await db.session.count({ where: { user: { email }, revokedAt: null } })).toBe(1); await agent.get('/api/auth/me').expect(200); const csrf = await agent.get('/api/auth/csrf').expect(200);
+    expect(await db.session.count({ where: { user: { email }, revokedAt: null } })).toBe(1);
+    const cookie = cookies.find((value) => value.startsWith('bce_session=')) as string;
+    const token = cookie.split(';')[0].split('=')[1];
+    const { createHash } = await import('node:crypto');
+    await db.session.updateMany({ where: { tokenHash: createHash('sha256').update(token).digest('hex') }, data: { lastSeenAt: new Date(Date.now() - 16 * 60_000) } });
+    await agent.get('/api/auth/me').expect(200);
+    expect((await db.session.findUniqueOrThrow({ where: { tokenHash: createHash('sha256').update(token).digest('hex') } })).lastSeenAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+    const csrf = await agent.get('/api/auth/csrf').expect(200);
     await agent.post('/api/auth/logout').expect(403); await agent.post('/api/auth/logout').set('X-CSRF-Token', 'incorrecto').expect(403); await agent.post('/api/auth/logout').set('X-CSRF-Token', csrf.body.token).expect(201); await agent.get('/api/auth/me').expect(401);
   });
   it('rechaza cuenta desactivada y sesión vencida', async () => { await db.user.update({ where: { email }, data: { isActive: false } }); await request(app.getHttpServer()).post('/api/auth/login').send({ email, password }).expect(401); await db.user.update({ where: { email }, data: { isActive: true } }); const result = await request(app.getHttpServer()).post('/api/auth/login').send({ email, password }).expect(201); const cookies = result.headers['set-cookie'] as unknown as string[]; const cookie = cookies.find((value) => value.startsWith('bce_session=')) as string; const token = cookie.split(';')[0].split('=')[1]; const { createHash } = await import('node:crypto'); await db.session.updateMany({ where: { tokenHash: createHash('sha256').update(token).digest('hex') }, data: { expiresAt: new Date(Date.now() - 1000) } }); await request(app.getHttpServer()).get('/api/auth/me').set('Cookie', cookie).expect(401); });

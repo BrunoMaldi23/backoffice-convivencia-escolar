@@ -5,14 +5,16 @@ import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../database/database.service';
 import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
+import { assertPasswordPolicy } from '../../common/security/password-policy';
+import { AuditRequestContext, SecurityAuditService } from '../../common/security/security-audit.service';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 @Injectable()
 export class PasswordService {
-  constructor(private readonly db: DatabaseService, private readonly mail: MailService, private readonly config: ConfigService) {}
-  async forgot(email: string) {
+  constructor(private readonly db: DatabaseService, private readonly mail: MailService, private readonly config: ConfigService, private readonly audit: SecurityAuditService) {}
+  async forgot(email: string, context: AuditRequestContext = {}) {
     const user = await this.db.user.findUnique({ where: { email: email.trim().toLowerCase() }, select: { id: true, email: true, isActive: true } });
-    await this.db.securityAudit.create({ data: { actorUserId: user?.id, action: 'PASSWORD_RESET_REQUEST', targetType: 'USER', targetId: user?.id, metadata: { result: 'ACCEPTED' } } });
+    await this.audit.record({ actorUserId: user?.id, action: 'PASSWORD_RESET_REQUEST', targetType: 'USER', targetId: user?.id, metadata: { result: 'ACCEPTED' }, context });
     if (user?.isActive) {
       const token = randomBytes(32).toString('base64url');
       await this.db.$transaction(async (tx) => {
@@ -20,11 +22,12 @@ export class PasswordService {
         await tx.passwordResetToken.create({ data: { userId: user.id, tokenHash: digest(token), purpose: 'RESET', expiresAt: new Date(Date.now() + this.config.getOrThrow<number>('PASSWORD_RESET_TTL_MINUTES') * 60_000) } });
       });
       try { await this.mail.sendAction(user.email, 'RESET', token); }
-      catch { await this.db.securityAudit.create({ data: { actorUserId: user.id, action: 'PASSWORD_RESET_DELIVERY_FAILED', targetType: 'USER', targetId: user.id, metadata: { result: 'FAILED' } } }); }
+      catch { await this.audit.record({ actorUserId: user.id, action: 'PASSWORD_RESET_DELIVERY_FAILED', targetType: 'USER', targetId: user.id, metadata: { result: 'FAILED' }, context }); }
     }
     return { message: 'Si la cuenta existe, recibirá instrucciones por correo.' };
   }
-  async consume(token: string, password: string, purpose: 'RESET' | 'INVITE') {
+  async consume(token: string, password: string, purpose: 'RESET' | 'INVITE', context: AuditRequestContext = {}) {
+    assertPasswordPolicy(password);
     const passwordHash = await argon2.hash(password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
     try { await this.db.$transaction(async (tx) => {
       const record = await tx.passwordResetToken.findUnique({ where: { tokenHash: digest(token) } });
@@ -33,7 +36,7 @@ export class PasswordService {
       if (claimed.count !== 1) throw new BadRequestException('Código inválido o vencido');
       await tx.user.update({ where: { id: record.userId }, data: { passwordHash, ...(purpose === 'INVITE' ? { isActive: true } : {}) } });
       await tx.session.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.securityAudit.create({ data: { actorUserId: record.userId, action: purpose === 'INVITE' ? 'INVITATION_ACCEPTED' : 'PASSWORD_RESET', targetType: 'USER', targetId: record.userId, metadata: { result: 'SUCCESS' } } });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: record.userId, action: purpose === 'INVITE' ? 'INVITATION_ACCEPTED' : 'PASSWORD_RESET', targetType: 'USER', targetId: record.userId, metadata: { result: 'SUCCESS' }, context }) });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }); }
     catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') throw new BadRequestException('Código inválido o vencido'); throw error; }
     return { success: true };

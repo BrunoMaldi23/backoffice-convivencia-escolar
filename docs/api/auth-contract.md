@@ -25,3 +25,5 @@ await api.post('/auth/logout', {}, { headers: { 'X-CSRF-Token': csrf.token } });
 Para `PATCH /users/:id`, por ejemplo, obtenga primero el CSRF y envíelo en el mismo encabezado. No almacene la sesión en `localStorage`. Ante `401`, limpie el estado local y redirija a ingreso. `403` indica permiso insuficiente o CSRF ausente/incorrecto; muestre un mensaje sin repetir automáticamente la escritura. `400` indica DTO inválido, `409` conflicto y `429` límite de solicitudes. NestJS devuelve normalmente `{statusCode, message, error}`; `message` puede ser una lista de validaciones. No use ese texto como clave de lógica de cliente.
 
 La documentación de recuperación e invitación está en [password-recovery-contract.md](password-recovery-contract.md).
+
+La actividad de sesión se actualiza de forma diferida, como máximo una vez por el intervalo `SESSION_LAST_SEEN_UPDATE_MINUTES`, sin extender la expiración absoluta. La API no habilita `trust proxy`: en producción debe configurarse únicamente con la topología conocida del proxy inverso para que la IP registrada y el rate limiting sean confiables.

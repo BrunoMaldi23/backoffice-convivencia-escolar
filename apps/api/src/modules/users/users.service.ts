@@ -5,21 +5,23 @@ import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../database/database.service';
 import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
+import { AuditRequestContext, SecurityAuditService } from '../../common/security/security-audit.service';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const userSelect = { id: true, email: true, displayName: true, isActive: true, createdAt: true, updatedAt: true, roles: { select: { role: { select: { name: true } } } } } as const;
 const present = (user: { roles: { role: { name: string } }[] } & Record<string, unknown>) => ({ ...user, roles: user.roles.map((r) => r.role.name) });
+const auditUser = (user: { email: string; displayName: string; isActive: boolean; roles: { role: { name: string } }[] }) => ({ email: user.email, displayName: user.displayName, isActive: user.isActive, roles: user.roles.map((r) => r.role.name).sort() });
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService, private readonly mail: MailService, private readonly config: ConfigService) {}
+  constructor(private readonly db: DatabaseService, private readonly mail: MailService, private readonly config: ConfigService, private readonly audit: SecurityAuditService) {}
   async list(page: number, limit: number, search?: string, role?: string, active?: boolean) {
     const where: Prisma.UserWhereInput = { ...(active === undefined ? {} : { isActive: active }), ...(search ? { OR: [{ email: { contains: search, mode: 'insensitive' } }, { displayName: { contains: search, mode: 'insensitive' } }] } : {}), ...(role ? { roles: { some: { role: { name: role } } } } : {}) };
     const [items, total] = await this.db.$transaction([this.db.user.findMany({ where, select: userSelect, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } }), this.db.user.count({ where })]);
     return { items: items.map(present), total, page, limit };
   }
   async get(id: string) { const user = await this.db.user.findUnique({ where: { id }, select: userSelect }); if (!user) throw new NotFoundException('Usuario no encontrado'); return present(user); }
-  async create(email: string, displayName: string, roleNames: string[], actorId: string) {
+  async create(email: string, displayName: string, roleNames: string[], actorId: string, context: AuditRequestContext = {}) {
     const normalized = email.trim().toLowerCase();
     if (roleNames.includes('SYSTEM_ADMIN')) throw new ForbiddenException('No se concede SYSTEM_ADMIN al crear cuentas');
     const roles = await this.resolveRoles(roleNames);
@@ -30,22 +32,23 @@ export class UsersService {
       user = await this.db.$transaction(async (tx) => {
         const created = await tx.user.create({ data: { email: normalized, displayName: displayName.trim(), isActive: false, passwordHash: unusableHash, roles: { create: roles.map((r) => ({ roleId: r.id })) } } });
         await tx.passwordResetToken.create({ data: { userId: created.id, tokenHash: digest(token), purpose: 'INVITE', expiresAt: new Date(Date.now() + this.config.getOrThrow<number>('PASSWORD_RESET_TTL_MINUTES') * 60_000) } });
-        await tx.securityAudit.create({ data: { actorUserId: actorId, action: 'USER_CREATED', targetType: 'USER', targetId: created.id, metadata: { result: 'SUCCESS' } } });
+        await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_CREATED', targetType: 'USER', targetId: created.id, metadata: { result: 'SUCCESS' }, changes: this.audit.userChanges({}, { email: normalized, displayName: displayName.trim(), isActive: false, roles: roleNames.sort() }), context }) });
         return created;
       });
     } catch (error) { this.duplicate(error); throw error; }
     await this.mail.sendAction(normalized, 'INVITE', token);
     return this.get(user.id);
   }
-  async update(id: string, data: { email?: string; displayName?: string }, actorId: string) {
+  async update(id: string, data: { email?: string; displayName?: string }, actorId: string, context: AuditRequestContext = {}) {
     try { await this.db.$transaction(async (tx) => {
-      if (!await tx.user.findUnique({ where: { id }, select: { id: true } })) throw new NotFoundException('Usuario no encontrado');
-      await tx.user.update({ where: { id }, data: { ...(data.email ? { email: data.email.trim().toLowerCase() } : {}), ...(data.displayName ? { displayName: data.displayName.trim() } : {}) } });
-      await tx.securityAudit.create({ data: { actorUserId: actorId, action: 'USER_UPDATED', targetType: 'USER', targetId: id, metadata: { fields: Object.keys(data), result: 'SUCCESS' } } });
+      const before = await tx.user.findUnique({ where: { id }, select: userSelect });
+      if (!before) throw new NotFoundException('Usuario no encontrado');
+      const after = await tx.user.update({ where: { id }, data: { ...(data.email ? { email: data.email.trim().toLowerCase() } : {}), ...(data.displayName ? { displayName: data.displayName.trim() } : {}) }, select: userSelect });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_UPDATED', targetType: 'USER', targetId: id, metadata: { fields: Object.keys(data), result: 'SUCCESS' }, changes: this.audit.userChanges(auditUser(before), auditUser(after)), context }) });
     }); } catch (error) { this.duplicate(error); throw error; }
     return this.get(id);
   }
-  async status(id: string, isActive: boolean, actorId: string) {
+  async status(id: string, isActive: boolean, actorId: string, context: AuditRequestContext = {}) {
     await this.db.$transaction(async (tx) => {
       await this.adminLock(tx);
       const user = await tx.user.findUnique({ where: { id }, include: { roles: { include: { role: true } } } });
@@ -54,11 +57,11 @@ export class UsersService {
       if (!isActive && user.isActive && user.roles.some((r) => r.role.name === 'SYSTEM_ADMIN')) await this.ensureAnotherAdmin(tx, id);
       await tx.user.update({ where: { id }, data: { isActive } });
       if (!isActive) await tx.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.securityAudit.create({ data: { actorUserId: actorId, action: isActive ? 'USER_ACTIVATED' : 'USER_DISABLED', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' } } });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: isActive ? 'USER_ACTIVATED' : 'USER_DISABLED', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' }, changes: this.audit.userChanges({ isActive: user.isActive }, { isActive }), context }) });
     });
     return this.get(id);
   }
-  async assignRoles(id: string, names: string[], actorId: string) {
+  async assignRoles(id: string, names: string[], actorId: string, context: AuditRequestContext = {}) {
     const roles = await this.resolveRoles(names);
     await this.db.$transaction(async (tx) => {
       await this.adminLock(tx);
@@ -75,19 +78,19 @@ export class UsersService {
       await tx.userRole.deleteMany({ where: { userId: id } });
       await tx.userRole.createMany({ data: roles.map((role) => ({ userId: id, roleId: role.id })) });
       await tx.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.securityAudit.create({ data: { actorUserId: actorId, action: 'USER_ROLES_CHANGED', targetType: 'USER', targetId: id, metadata: { roles: names, result: 'SUCCESS' } } });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_ROLES_CHANGED', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' }, changes: this.audit.userChanges({ roles: user.roles.map((item) => item.role.name).sort() }, { roles: [...names].sort() }), context }) });
     });
     return this.get(id);
   }
-  async revokeSessions(id: string, actorId: string) {
+  async revokeSessions(id: string, actorId: string, context: AuditRequestContext = {}) {
     await this.db.$transaction(async (tx) => {
       if (!await tx.user.findUnique({ where: { id }, select: { id: true } })) throw new NotFoundException('Usuario no encontrado');
       await tx.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.securityAudit.create({ data: { actorUserId: actorId, action: 'USER_SESSIONS_REVOKED', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' } } });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_SESSIONS_REVOKED', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' }, context }) });
     });
     return { success: true };
   }
-  async resendInvitation(id: string, actorId: string) {
+  async resendInvitation(id: string, actorId: string, context: AuditRequestContext = {}) {
     const user = await this.db.user.findUnique({ where: { id }, select: { id: true, email: true, isActive: true } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     if (user.isActive) throw new ConflictException('La cuenta ya está activa');
@@ -95,7 +98,7 @@ export class UsersService {
     await this.db.$transaction(async (tx) => {
       await tx.passwordResetToken.updateMany({ where: { userId: id, purpose: 'INVITE', usedAt: null }, data: { usedAt: new Date() } });
       await tx.passwordResetToken.create({ data: { userId: id, purpose: 'INVITE', tokenHash: digest(token), expiresAt: new Date(Date.now() + this.config.getOrThrow<number>('PASSWORD_RESET_TTL_MINUTES') * 60_000) } });
-      await tx.securityAudit.create({ data: { actorUserId: actorId, action: 'USER_INVITATION_SENT', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' } } });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_INVITATION_SENT', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' }, context }) });
     });
     await this.mail.sendAction(user.email, 'INVITE', token);
     return { success: true };

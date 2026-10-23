@@ -9,4 +9,5 @@ import { RolesModule } from './modules/roles/roles.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}
+import { SecurityAuditModule } from './common/security/security-audit.module';
+@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}

@@ -11,3 +11,5 @@ Los códigos son aleatorios, de un solo uso, vigencia 30 minutos, y se almacenan
 Mailpit entrega un correo en español a la cuenta. El correo contiene el código separado de la URL (`/establecer-contrasena` o `/restablecer-contrasena`); Vue debe pedir que el usuario pegue el código en un formulario y enviarlo en el cuerpo POST. No coloque el código en ruta, query string, analytics, logs, `localStorage` ni encabezado `Referer`. Tras éxito, dirija al ingreso. El frontend visual aún no está implementado.
 
 El SMTP local usa `mailpit:1025`; la bandeja de desarrollo está en `http://localhost:8025`. En producción, configure un servidor institucional y transporte seguro antes de habilitar estos flujos fuera del entorno local.
+
+La vigencia indicada en el correo usa `PASSWORD_RESET_TTL_MINUTES`; no está fijada a un valor textual. La política compartida exige al menos 12 caracteres para una contraseña nueva.

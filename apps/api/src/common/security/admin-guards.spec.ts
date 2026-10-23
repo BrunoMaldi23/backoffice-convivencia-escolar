@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { DatabaseService } from '../../database/database.service';
 import { AuthService } from '../../modules/auth/auth.service';
 import { CsrfGuard, PermissionsGuard, SessionGuard } from './admin-guards';
+import { SecurityAuditService } from './security-audit.service';
 
 const context = (request: Record<string, unknown>) => ({ switchToHttp: () => ({ getRequest: () => request }), getHandler: () => function handler() {}, getClass: () => class Controller {} }) as unknown as ExecutionContext;
 
@@ -18,7 +19,8 @@ describe('Guards administrativos', () => {
   it('consulta permisos efectivos y deniega los ausentes', async () => {
     const reflector = { getAllAndOverride: () => ['users.read'] } as unknown as Reflector;
     const db = { rolePermission: { findMany: jest.fn().mockResolvedValue([]) }, securityAudit: { create: jest.fn().mockResolvedValue({}) } } as unknown as DatabaseService;
-    await expect(new PermissionsGuard(reflector, db).canActivate(context({ actorId: 'fixture', method: 'GET', route: { path: '/users' } }))).rejects.toBeInstanceOf(ForbiddenException);
-    expect(db.securityAudit.create).toHaveBeenCalled();
+    const audit = { record: jest.fn().mockResolvedValue({}) } as unknown as SecurityAuditService;
+    await expect(new PermissionsGuard(reflector, db, audit).canActivate(context({ actorId: 'fixture', method: 'GET', route: { path: '/users' }, get: () => undefined }))).rejects.toBeInstanceOf(ForbiddenException);
+    expect(audit.record).toHaveBeenCalled();
   });
 });

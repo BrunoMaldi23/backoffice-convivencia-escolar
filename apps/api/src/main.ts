@@ -9,6 +9,7 @@ const cookieParser: typeof import('cookie-parser') = require('cookie-parser');
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(new Logger()); app.enableShutdownHooks(); app.setGlobalPrefix('api');
+  // Se conserva trust proxy desactivado: solo debe configurarse con la topología conocida del proxy inverso.
   app.use(cookieParser());
   app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' }));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));

@@ -5,3 +5,5 @@
 Acciones actuales incluyen `AUTH_LOGIN`, `AUTH_LOGIN_FAILED`, `AUTH_LOGOUT`, `ADMIN_ACCESS_DENIED`, `USER_CREATED`, `USER_UPDATED`, `USER_ACTIVATED`, `USER_DISABLED`, `USER_ROLES_CHANGED`, `USER_SESSIONS_REVOKED`, `USER_INVITATION_SENT`, `INVITATION_ACCEPTED`, `PASSWORD_RESET_REQUEST`, `PASSWORD_RESET`, `PASSWORD_RESET_DELIVERY_FAILED`.
 
 No hay endpoints de modificación ni eliminación de auditoría. Errores: 400 filtros inválidos, 401 sin sesión, 403 sin permiso.
+
+Desde Fase 1C, los eventos nuevos incluyen `ipAddress`, `userAgent` y `changes` cuando aplica. `changes` solo contiene campos administrativos permitidos (`email`, `displayName`, `isActive`, `roles`) con resumen antes/después. La capa de auditoría redacta por nombre contraseñas, tokens, cookies, hashes, CSRF, secretos y autorizaciones antes de persistir o responder. Los eventos históricos mantienen campos nulos para esta información.

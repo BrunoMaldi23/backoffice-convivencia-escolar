@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { AuthService } from '../../modules/auth/auth.service';
 import { DatabaseService } from '../../database/database.service';
 import { PERMISSIONS_KEY } from './require-permissions';
+import { SecurityAuditService } from './security-audit.service';
 
 export interface AdminRequest extends Request { actorId?: string }
 
@@ -31,7 +32,7 @@ export class CsrfGuard implements CanActivate {
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly db: DatabaseService) {}
+  constructor(private readonly reflector: Reflector, private readonly db: DatabaseService, private readonly audit: SecurityAuditService) {}
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<AdminRequest>();
     if (!req.actorId) throw new UnauthorizedException();
@@ -40,7 +41,7 @@ export class PermissionsGuard implements CanActivate {
     const matches = await this.db.rolePermission.findMany({ where: { role: { users: { some: { userId: req.actorId } } }, permission: { code: { in: codes } } }, select: { permission: { select: { code: true } } } });
     const granted = new Set(matches.map((item) => item.permission.code));
     if (codes.every((code) => granted.has(code))) return true;
-    await this.db.securityAudit.create({ data: { actorUserId: req.actorId, action: 'ADMIN_ACCESS_DENIED', targetType: 'ENDPOINT', metadata: { method: req.method, route: req.route?.path ?? '', result: 'DENIED' } } });
+    await this.audit.record({ actorUserId: req.actorId, action: 'ADMIN_ACCESS_DENIED', targetType: 'ENDPOINT', metadata: { method: req.method, route: req.route?.path ?? '', result: 'DENIED' }, context: { ipAddress: req.ip, userAgent: req.get('user-agent') } });
     throw new ForbiddenException('Permiso insuficiente');
   }
 }

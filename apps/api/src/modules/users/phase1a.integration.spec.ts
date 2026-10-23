@@ -86,6 +86,10 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     const listed = await agent.get('/api/users').query({ search: employeeEmail, active: 'true' }).expect(200);
     expect(listed.body.items).toHaveLength(1);
     await agent.patch(`/api/users/${id}`).set('X-CSRF-Token', csrf).send({ displayName: 'Nombre actualizado' }).expect(200);
+    const updateAudit = await db!.securityAudit.findFirstOrThrow({ where: { action: 'USER_UPDATED', targetId: id }, orderBy: { createdAt: 'desc' } });
+    expect(updateAudit.ipAddress).toBeTruthy();
+    expect(updateAudit.changes).toMatchObject({ displayName: { before: 'Empleado de prueba', after: 'Nombre actualizado' } });
+    expect(JSON.stringify(updateAudit)).not.toMatch(/passwordHash|tokenHash|bce_session/);
     await agent.patch(`/api/users/${id}/roles`).set('X-CSRF-Token', csrf).send({ roles: ['AUDITOR'] }).expect(200);
     await agent.post(`/api/users/${id}/revoke-sessions`).set('X-CSRF-Token', csrf).expect(201);
     await agent.patch(`/api/users/${id}/status`).set('X-CSRF-Token', csrf).send({ isActive: false }).expect(200);
