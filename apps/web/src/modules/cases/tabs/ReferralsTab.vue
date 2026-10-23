@@ -46,6 +46,7 @@ const NEXT: Record<ReferralStatus, { status: ReferralStatus; label: string }[]> 
   ENVIADA: [{ status: 'CON_RESPUESTA', label: 'Registrar respuesta' }, { status: 'CERRADA', label: 'Cerrar derivación' }],
   CON_RESPUESTA: [{ status: 'CERRADA', label: 'Cerrar derivación' }], CERRADA: []
 };
+const NEXT_ICON: Record<ReferralStatus, string> = { PENDIENTE: 'circle', ENVIADA: 'send', CON_RESPUESTA: 'message', CERRADA: 'lock' };
 const acting = ref<{ referral: CaseReferral; status: ReferralStatus; label: string } | null>(null);
 const actOpen = computed({ get: () => Boolean(acting.value), set: (v: boolean) => { if (!v) acting.value = null; } });
 const act = reactive({ note: '', contact: '' });
@@ -74,8 +75,13 @@ async function submitAct() {
         <ul class="space-y-3">
           <li v-for="r in data" :key="r.id" class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-start justify-between gap-2">
-              <div class="min-w-0"><p class="break-words text-sm font-semibold text-slate-900">{{ r.institutionName }}</p><p class="text-xs text-slate-500">{{ referralTypeLabel(r.typeCode) }}</p></div>
-              <StatusBadge :status="r.status" />
+              <div class="min-w-0 flex-1"><p class="break-words text-sm font-semibold text-slate-900">{{ r.institutionName }}</p><p class="text-xs text-slate-500">{{ referralTypeLabel(r.typeCode) }}</p></div>
+              <div class="flex items-center gap-2">
+                <StatusBadge :status="r.status" />
+                <div v-if="can('referrals.manage') && NEXT[r.status].length && !closed" class="flex items-center gap-1">
+                  <Button v-for="next in NEXT[r.status]" :key="next.status" size="small" :severity="next.status === 'CERRADA' ? 'secondary' : 'success'" text :aria-label="next.label" :title="next.label" @click="openAct(r, next)"><template #icon><AppIcon :name="NEXT_ICON[next.status]" :size="16" /></template></Button>
+                </div>
+              </div>
             </div>
             <p class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ r.reason }}</p>
             <dl class="mt-3 grid gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
@@ -86,9 +92,6 @@ async function submitAct() {
               <div v-if="r.closedAt" class="flex gap-1"><dt class="text-slate-500">Cerrada:</dt><dd class="tabular-nums">{{ formatDate(r.closedAt) }}</dd></div>
               <div v-if="r.responseNote" class="flex gap-1 sm:col-span-2"><dt class="text-slate-500">Respuesta recibida:</dt><dd class="whitespace-pre-line break-words">{{ r.responseNote }}</dd></div>
             </dl>
-            <div v-if="can('referrals.manage') && NEXT[r.status].length && !closed" class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-              <Button v-for="(next, index) in NEXT[r.status]" :key="next.status" :label="next.label" size="small" :severity="index === 0 ? undefined : 'secondary'" :outlined="index !== 0" @click="openAct(r, next)" />
-            </div>
           </li>
         </ul>
       </template>

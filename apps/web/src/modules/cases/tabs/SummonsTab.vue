@@ -82,8 +82,16 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
         <ul class="space-y-3">
           <li v-for="s in data" :key="s.id" class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-start justify-between gap-2">
-              <p class="min-w-0 break-words text-sm font-semibold text-slate-900">{{ s.recipientLabel }}</p>
-              <StatusBadge :status="s.status" />
+              <p class="min-w-0 flex-1 break-words text-sm font-semibold text-slate-900">{{ s.recipientLabel }}</p>
+              <div class="flex items-center gap-2">
+                <StatusBadge :status="s.status" />
+                <div v-if="can('summons.manage') && s.status === 'PROGRAMADA' && !closed" class="flex items-center gap-1">
+                  <Button size="small" severity="success" text aria-label="Registrar reunión realizada" title="Registrar reunión realizada" @click="openAct(s, 'REALIZADA')"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
+                  <Button size="small" severity="secondary" text aria-label="Registrar inasistencia" title="Registrar inasistencia" @click="openAct(s, 'NO_ASISTIO')"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
+                  <Button size="small" severity="secondary" text aria-label="Reprogramar citación" title="Reprogramar citación" @click="openAct(s, 'REPROGRAMAR')"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                  <Button size="small" severity="danger" text aria-label="Cancelar citación" title="Cancelar citación" @click="openAct(s, 'CANCELADA')"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+                </div>
+              </div>
             </div>
             <p class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ s.reason }}</p>
             <dl class="mt-3 grid gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
@@ -91,12 +99,6 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
               <div class="flex gap-1"><dt class="text-slate-500">Lugar:</dt><dd class="break-words">{{ s.location }}</dd></div>
               <div v-if="s.outcomeNote" class="flex gap-1 sm:col-span-2"><dt class="text-slate-500">Resultado:</dt><dd class="whitespace-pre-line break-words">{{ s.outcomeNote }}</dd></div>
             </dl>
-            <div v-if="can('summons.manage') && s.status === 'PROGRAMADA' && !closed" class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-              <Button label="Registrar realizada" size="small" @click="openAct(s, 'REALIZADA')" />
-              <Button label="No asistió" size="small" severity="secondary" outlined @click="openAct(s, 'NO_ASISTIO')" />
-              <Button label="Reprogramar" size="small" severity="secondary" outlined @click="openAct(s, 'REPROGRAMAR')" />
-              <Button label="Cancelar" size="small" severity="danger" text @click="openAct(s, 'CANCELADA')" />
-            </div>
           </li>
         </ul>
       </template>

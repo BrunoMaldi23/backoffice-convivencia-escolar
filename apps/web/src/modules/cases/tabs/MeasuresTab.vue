@@ -68,8 +68,18 @@ function editDue(measure: CaseMeasure) { dueTarget.value = measure; dueValue.val
         <ul class="space-y-3">
           <li v-for="m in data" :key="m.id" class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-start justify-between gap-2">
-              <p class="min-w-0 break-words text-sm font-semibold text-slate-900">{{ m.title }}</p>
-              <StatusBadge :status="m.status" />
+              <p class="min-w-0 flex-1 break-words text-sm font-semibold text-slate-900">{{ m.title }}</p>
+              <div class="flex items-center gap-2">
+                <StatusBadge :status="m.status" />
+                <div v-if="can('measures.manage')" class="flex items-center gap-1">
+                  <template v-if="m.status === 'PENDIENTE'">
+                    <Button size="small" severity="success" text aria-label="Marcar medida como cumplida" title="Marcar medida como cumplida" @click="changing = { measure: m, status: 'COMPLETADA' }"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
+                    <Button size="small" severity="secondary" text aria-label="Cambiar plazo de la medida" title="Cambiar plazo de la medida" @click="editDue(m)"><template #icon><AppIcon name="pencil" :size="16" /></template></Button>
+                    <Button size="small" severity="danger" text aria-label="Cancelar medida" title="Cancelar medida" @click="changing = { measure: m, status: 'CANCELADA' }"><template #icon><AppIcon name="trash" :size="16" /></template></Button>
+                  </template>
+                  <Button v-else size="small" severity="secondary" text aria-label="Reabrir medida como pendiente" title="Reabrir medida como pendiente" @click="changing = { measure: m, status: 'PENDIENTE' }"><template #icon><AppIcon name="refresh" :size="16" /></template></Button>
+                </div>
+              </div>
             </div>
             <p v-if="m.description" class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ m.description }}</p>
             <dl class="mt-3 grid gap-x-6 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
@@ -77,14 +87,6 @@ function editDue(measure: CaseMeasure) { dueTarget.value = measure; dueValue.val
               <div v-if="m.completedAt" class="flex gap-1"><dt class="text-slate-500">Cumplida el:</dt><dd class="tabular-nums">{{ formatDate(m.completedAt) }}</dd></div>
               <div class="flex gap-1 sm:col-span-2"><dt class="text-slate-500">Responsables:</dt><dd>{{ m.responsibles.length ? m.responsibles.map((r) => nameOf(r.userId)).join(', ') : 'Sin responsables asignados' }}</dd></div>
             </dl>
-            <div v-if="can('measures.manage')" class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-              <template v-if="m.status === 'PENDIENTE'">
-                <Button label="Marcar como cumplida" size="small" @click="changing = { measure: m, status: 'COMPLETADA' }" />
-                <Button label="Cambiar plazo" size="small" severity="secondary" outlined @click="editDue(m)" />
-                <Button label="Cancelar medida" size="small" severity="danger" text @click="changing = { measure: m, status: 'CANCELADA' }" />
-              </template>
-              <Button v-else label="Reabrir como pendiente" size="small" severity="secondary" outlined @click="changing = { measure: m, status: 'PENDIENTE' }" />
-            </div>
           </li>
         </ul>
       </template>
