@@ -1,5 +1,7 @@
 # API
 
+Referencia consolidada de todos los endpoints: [backend-contracts.md](backend-contracts.md). Guía Vue: [frontend-integration-guide.md](frontend-integration-guide.md). Operación documental: [document-storage-decision.md](document-storage-decision.md).
+
 Contratos para Vue: [autenticación](auth-contract.md), [usuarios y roles](users-roles-contract.md), [recuperación e invitaciones](password-recovery-contract.md) y [auditoría](audit-contract.md). El prefijo es `/api`; las escrituras autenticadas requieren cookie y encabezado CSRF.
 
 La API REST usa el prefijo global `/api`, JSON y nombres de recursos en minúsculas. Swagger se publica en `/api/docs` solo para desarrollo local.
