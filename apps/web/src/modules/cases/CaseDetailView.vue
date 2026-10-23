@@ -1,193 +1,126 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import Button from 'primevue/button';
+import Menu from 'primevue/menu';
 import Tab from 'primevue/tab';
 import TabList from 'primevue/tablist';
 import TabPanel from 'primevue/tabpanel';
 import TabPanels from 'primevue/tabpanels';
 import Tabs from 'primevue/tabs';
 import AppIcon from '@/components/AppIcon.vue';
-import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
-import DetailPanel from '@/components/DetailPanel.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import ErrorState from '@/components/ErrorState.vue';
+import LoadingState from '@/components/LoadingState.vue';
+import PageHeader from '@/components/PageHeader.vue';
 import PriorityBadge from '@/components/PriorityBadge.vue';
-import RelatedTable from '@/components/RelatedTable.vue';
-import ResourceDetailShell from '@/components/ResourceDetailShell.vue';
-import SectionCard from '@/components/SectionCard.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import Timeline from '@/components/Timeline.vue';
-import type { TimelineEntry } from '@/components/types';
-import { useResource } from '@/composables/useResource';
-import { formatDate, formatDateTime } from '@/lib/format';
-import { submitResource } from '@/services/resources';
-import type { CaseSummary } from '@/types/models';
-import { documentColumns } from '../documents/documents.config';
-import { followUpColumns } from '../followups/followups.config';
-import { interviewColumns } from '../interviews/interviews.config';
-import { measureColumns } from '../measures/measures.config';
-import { referralColumns } from '../referrals/referrals.config';
+import { useCase } from '@/composables/useCases';
+import { useSession } from '@/composables/useSession';
+import { formatFolio, TRANSITIONS, transitionLabel } from '@/lib/catalogs';
+import { isNotFound } from '@/lib/errors';
+import type { CaseStatus } from '@/types/api';
+import AssignCaseDialog from './AssignCaseDialog.vue';
+import EditCaseDialog from './EditCaseDialog.vue';
+import TransitionDialog from './TransitionDialog.vue';
+import AccessTab from './tabs/AccessTab.vue';
+import DocumentsTab from './tabs/DocumentsTab.vue';
+import FollowUpsTab from './tabs/FollowUpsTab.vue';
+import InterviewsTab from './tabs/InterviewsTab.vue';
+import MeasuresTab from './tabs/MeasuresTab.vue';
+import ParticipantsTab from './tabs/ParticipantsTab.vue';
+import ProtocolsTab from './tabs/ProtocolsTab.vue';
+import ReportsTab from './tabs/ReportsTab.vue';
+import SummaryTab from './tabs/SummaryTab.vue';
+import TasksTab from './tabs/TasksTab.vue';
+import TimelineTab from './tabs/TimelineTab.vue';
 
-defineProps<{ id: string }>();
+/**
+ * Expediente de un caso. Las pestañas se montan solo al abrirse (cada una consulta su propio endpoint) y se ocultan las que el
+ * rol no puede usar según la matriz inicial; el servidor sigue siendo la autoridad. `?tab=` permite enlazar una pestaña.
+ */
+const props = defineProps<{ id: string }>();
 const route = useRoute();
 const router = useRouter();
+const { can } = useSession();
+const query = useCase(() => props.id);
+const record = computed(() => query.data.value);
 
 const TABS = [
-  ['resumen', 'Resumen'], ['involucrados', 'Involucrados'], ['antecedentes', 'Antecedentes'], ['entrevistas', 'Entrevistas'], ['medidas', 'Medidas'],
-  ['protocolos', 'Protocolos'], ['evidencias', 'Evidencias'], ['documentos', 'Documentos'], ['derivaciones', 'Derivaciones'], ['seguimientos', 'Seguimientos'], ['bitacora', 'Bitácora']
+  { key: 'resumen', label: 'Resumen', permission: undefined }, { key: 'linea', label: 'Línea de tiempo', permission: 'cases.timeline.read' }, { key: 'denuncias', label: 'Denuncias', permission: 'reports.read' },
+  { key: 'involucrados', label: 'Involucrados', permission: 'participants.read' }, { key: 'entrevistas', label: 'Entrevistas', permission: 'interviews.read' }, { key: 'documentos', label: 'Documentos', permission: 'documents.read' },
+  { key: 'protocolos', label: 'Protocolos', permission: 'protocols.read' }, { key: 'medidas', label: 'Medidas', permission: 'measures.read' }, { key: 'seguimientos', label: 'Seguimientos', permission: 'follow-ups.read' },
+  { key: 'tareas', label: 'Tareas', permission: 'tasks.read' }, { key: 'acceso', label: 'Accesos', permission: 'case-grants.manage' }
 ] as const;
-type TabKey = (typeof TABS)[number][0];
-const tab = computed<TabKey>({
-  get: () => (TABS.some(([k]) => k === route.query.tab) ? (route.query.tab as TabKey) : 'resumen'),
-  set: (value) => router.replace({ query: { ...route.query, tab: value === 'resumen' ? undefined : value } })
+const tabs = computed(() => TABS.filter((tab) => can(tab.permission)));
+const tab = computed<string>({
+  get: () => (tabs.value.some((t) => t.key === route.query.tab) ? String(route.query.tab) : 'resumen'),
+  set: (value) => { void router.replace({ query: { ...route.query, tab: value === 'resumen' ? undefined : value } }); }
 });
 
-/** La bitácora se deriva de los registros vinculados; no se inventan eventos. */
-const interviews = useResource('interviews');
-const measures = useResource('measures');
-const referrals = useResource('referrals');
-const followUps = useResource('followUps');
-function logFor(c: CaseSummary): TimelineEntry[] {
-  const f = c.folio;
-  return [
-    { id: 'creado', title: 'Caso registrado', at: c.createdAt, tone: 'info' as const, meta: c.responsible },
-    ...(interviews.data.value ?? []).filter((i) => i.caseFolio === f).map((i) => ({ id: i.id, title: `Entrevista ${i.status === 'realizada' ? 'realizada' : 'programada'} con ${i.participant.toLowerCase()}`, at: i.scheduledAt, tone: 'progress' as const, meta: i.folio })),
-    ...(measures.data.value ?? []).filter((m) => m.caseFolio === f).map((m) => ({ id: m.id, title: `Medida de resguardo: ${m.type}`, at: m.startDate, tone: 'warning' as const, meta: m.folio })),
-    ...(referrals.data.value ?? []).filter((r) => r.caseFolio === f).map((r) => ({ id: r.id, title: `Derivación a ${r.institution}`, at: r.sentAt, tone: 'neutral' as const, meta: r.folio })),
-    ...(followUps.data.value ?? []).filter((s) => s.caseFolio === f).map((s) => ({ id: s.id, title: s.type, at: s.scheduledAt, tone: s.status === 'vencida' ? 'danger' as const : 'success' as const }))
-  ].sort((a, b) => b.at.localeCompare(a.at));
-}
+const editOpen = ref(false);
+const assignOpen = ref(false);
+const target = ref<CaseStatus | null>(null);
+const transitionOpen = computed({ get: () => Boolean(target.value), set: (v: boolean) => { if (!v) target.value = null; } });
+const menu = ref<InstanceType<typeof Menu> | null>(null);
 
-const closeOpen = ref(false);
+/** Cierre y reapertura exigen su propio permiso además del de cambiar estado. */
+const transitions = computed(() => {
+  const c = record.value;
+  if (!c) return [];
+  return TRANSITIONS[c.status].filter((to) => can(to === 'CERRADO' ? 'cases.close' : c.status === 'CERRADO' ? 'cases.reopen' : 'cases.transition'))
+    .map((to) => ({ label: transitionLabel(c.status, to), to, command: () => { target.value = to; } }));
+});
+const reload = () => { void query.refetch(); };
 </script>
 
 <template>
-  <ResourceDetailShell
-    :id="id" resource="cases" subject="el caso" :back="{ to: { name: 'cases' }, label: 'Volver a casos' }"
-    :title="(c) => `Expediente ${c.folio}`" :description="(c) => `${c.type}, ${c.course}. Ingresado el ${formatDate(c.createdAt)}.`"
-  >
-    <template #badges="{ item }"><StatusBadge :status="item.status" /></template>
-    <template #actions="{ item }">
-      <template v-if="item.status !== 'cerrado'">
-        <RouterLink :to="{ name: 'cases-edit', params: { id: item.id } }" custom>
-          <template #default="{ navigate, href }">
-            <Button as="a" :href="href" label="Editar" severity="secondary" outlined @click="navigate"><template #icon><AppIcon name="pencil" :size="15" /></template></Button>
+  <div>
+    <LoadingState v-if="query.isPending.value" :rows="6" />
+    <template v-else-if="record">
+      <PageHeader :title="`${formatFolio(record.folio)} · ${record.title}`" :back="{ to: { name: 'cases' }, label: 'Volver a casos' }">
+        <template #badges><StatusBadge :status="record.status" /><PriorityBadge :priority="record.priority" /></template>
+        <template #actions>
+          <Button v-if="can('cases.update')" label="Editar" severity="secondary" outlined @click="editOpen = true"><template #icon><AppIcon name="pencil" :size="15" /></template></Button>
+          <Button v-if="can('cases.assign')" label="Asignar" severity="secondary" outlined @click="assignOpen = true"><template #icon><AppIcon name="user-plus" :size="15" /></template></Button>
+          <template v-if="transitions.length">
+            <Button label="Cambiar estado" aria-haspopup="menu" @click="menu?.toggle($event)"><template #icon><AppIcon name="refresh" :size="15" /></template></Button>
+            <Menu ref="menu" :model="transitions" popup aria-label="Cambiar estado del caso">
+              <template #item="{ item, props: p }"><a v-bind="p.action" class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700">{{ item.label }}</a></template>
+            </Menu>
           </template>
-        </RouterLink>
-        <Button label="Cerrar caso" severity="secondary" @click="closeOpen = true" />
-      </template>
-    </template>
+        </template>
+      </PageHeader>
 
-    <template #default="{ item }">
-      <div class="mb-5 flex items-start gap-3 rounded-lg border border-sky-100 bg-sky-50/60 px-4 py-3 text-sm text-slate-700">
-        <AppIcon name="lock" :size="16" class="mt-0.5 text-sky-800" />
-        <p>Expediente confidencial. La identidad de estudiantes y familias solo es visible para perfiles autorizados y cada consulta queda registrada en auditoría.</p>
-      </div>
+      <p v-if="record.status === 'CERRADO'" class="mb-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="status">
+        <AppIcon name="lock" :size="16" class="mt-0.5 shrink-0" />Expediente cerrado. Para registrar documentos o medidas nuevas debe reabrirse.
+      </p>
 
-      <Tabs v-model:value="tab" scrollable>
-        <TabList>
-          <Tab v-for="[key, label] in TABS" :key="key" :value="key">{{ label }}</Tab>
-        </TabList>
-        <TabPanels class="!px-0 !pb-0 !pt-5">
-          <TabPanel value="resumen">
-            <div class="grid gap-6 lg:grid-cols-3">
-              <SectionCard title="Datos del caso" class="lg:col-span-2">
-                <DetailPanel
-                  :items="[
-                    { key: 'folio', label: 'Folio', value: item.folio }, { key: 'type', label: 'Tipo de situación', value: item.type },
-                    { key: 'course', label: 'Curso', value: item.course }, { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
-                    { key: 'responsible', label: 'Responsable', value: item.responsible }, { key: 'createdAt', label: 'Fecha de ingreso', value: formatDate(item.createdAt) },
-                    { key: 'updatedAt', label: 'Última actualización', value: formatDateTime(item.updatedAt) }
-                  ]"
-                >
-                  <template #item-priority><PriorityBadge :priority="item.priority" /></template>
-                  <template #item-status><StatusBadge :status="item.status" /></template>
-                </DetailPanel>
-              </SectionCard>
-              <SectionCard title="Actividad reciente">
-                <Timeline v-if="logFor(item).length > 1" :entries="logFor(item).slice(0, 4)" />
-                <EmptyState v-else compact icon="history" title="Sin actividad posterior al ingreso" />
-              </SectionCard>
-            </div>
-          </TabPanel>
-
-          <TabPanel value="involucrados">
-            <SectionCard title="Personas involucradas" description="Estudiantes, apoderados y funcionarios vinculados al caso, con su rol en los hechos." flush>
-              <template #actions><Button label="Agregar involucrado" size="small" outlined disabled title="Disponible al conectar el expediente" /></template>
-              <EmptyState icon="users" title="Sin involucrados registrados" description="Las personas se vinculan desde el registro de comunidad educativa. Sus datos se mostrarán con los resguardos de privacidad del rol." />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="antecedentes">
-            <SectionCard title="Antecedentes" description="Relato de los hechos, lugar y origen del caso.">
-              <EmptyState compact icon="file" title="Relato no disponible" description="El relato registrado al ingresar el caso se mostrará cuando el expediente esté conectado con el servidor." />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="entrevistas">
-            <SectionCard title="Entrevistas del caso" flush>
-              <template #actions>
-                <RouterLink :to="{ name: 'interviews-new' }" class="rounded text-sm font-medium text-sky-700 hover:underline">Nueva entrevista</RouterLink>
-              </template>
-              <RelatedTable resource="interviews" field="caseFolio" :value="item.folio" :columns="interviewColumns.filter((c) => c.field !== 'caseFolio')" detail-route="interviews-detail" label="Entrevistas" empty-title="Sin entrevistas registradas" empty-icon="message" />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="medidas">
-            <SectionCard title="Medidas de resguardo" flush>
-              <template #actions><RouterLink :to="{ name: 'measures-new' }" class="rounded text-sm font-medium text-sky-700 hover:underline">Nueva medida</RouterLink></template>
-              <RelatedTable resource="measures" field="caseFolio" :value="item.folio" :columns="measureColumns.filter((c) => c.field !== 'caseFolio')" detail-route="measures-detail" label="Medidas" empty-title="Sin medidas de resguardo" empty-icon="shield" />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="protocolos">
-            <SectionCard title="Protocolo aplicado">
-              <EmptyState icon="list-checks" title="Sin protocolo activado" description="La activación de un protocolo y el registro de sus etapas se habilitarán al conectar el módulo con el servidor.">
-                <Button label="Activar protocolo" outlined disabled title="Integración pendiente" />
-              </EmptyState>
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="evidencias">
-            <SectionCard title="Evidencias" description="Archivos y registros que respaldan los antecedentes. Solo visibles para el equipo del caso.">
-              <EmptyState icon="paperclip" title="Sin evidencias adjuntas" description="La carga de archivos requiere almacenamiento seguro en el servidor y aún no está disponible.">
-                <Button label="Adjuntar evidencia" outlined disabled title="Integración pendiente" />
-              </EmptyState>
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="documentos">
-            <SectionCard title="Documentos del caso" flush>
-              <RelatedTable resource="documents" field="caseFolio" :value="item.folio" :columns="documentColumns.filter((c) => c.field !== 'caseFolio')" detail-route="documents-detail" label="Documentos" empty-title="Sin documentos" empty-icon="file" />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="derivaciones">
-            <SectionCard title="Derivaciones" flush>
-              <template #actions><RouterLink :to="{ name: 'referrals-new' }" class="rounded text-sm font-medium text-sky-700 hover:underline">Nueva derivación</RouterLink></template>
-              <RelatedTable resource="referrals" field="caseFolio" :value="item.folio" :columns="referralColumns.filter((c) => c.field !== 'caseFolio')" detail-route="referrals-detail" label="Derivaciones" empty-title="Sin derivaciones" empty-icon="referral" />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="seguimientos">
-            <SectionCard title="Seguimientos" flush>
-              <RelatedTable resource="followUps" field="caseFolio" :value="item.folio" :columns="followUpColumns.filter((c) => c.field !== 'caseFolio')" detail-route="followups-detail" label="Seguimientos" empty-title="Sin seguimientos" empty-icon="activity" />
-            </SectionCard>
-          </TabPanel>
-
-          <TabPanel value="bitacora">
-            <SectionCard title="Bitácora del caso" description="Historial cronológico construido a partir de los registros vinculados.">
-              <Timeline :entries="logFor(item)" />
-            </SectionCard>
-          </TabPanel>
+      <Tabs v-model:value="tab" scrollable lazy>
+        <TabList><Tab v-for="t in tabs" :key="t.key" :value="t.key">{{ t.label }}</Tab></TabList>
+        <TabPanels class="!px-0 !pb-0 !pt-4">
+          <TabPanel value="resumen"><SummaryTab :case-record="record" /></TabPanel>
+          <TabPanel v-if="can('cases.timeline.read')" value="linea"><TimelineTab :case-id="id" /></TabPanel>
+          <TabPanel v-if="can('reports.read')" value="denuncias"><ReportsTab :case-id="id" /></TabPanel>
+          <TabPanel v-if="can('participants.read')" value="involucrados"><ParticipantsTab :case-record="record" /></TabPanel>
+          <TabPanel v-if="can('interviews.read')" value="entrevistas"><InterviewsTab :case-id="id" /></TabPanel>
+          <TabPanel v-if="can('documents.read')" value="documentos"><DocumentsTab :case-record="record" /></TabPanel>
+          <TabPanel v-if="can('protocols.read')" value="protocolos"><ProtocolsTab :case-record="record" /></TabPanel>
+          <TabPanel v-if="can('measures.read')" value="medidas"><MeasuresTab :case-record="record" /></TabPanel>
+          <TabPanel v-if="can('follow-ups.read')" value="seguimientos"><FollowUpsTab :case-id="id" /></TabPanel>
+          <TabPanel v-if="can('tasks.read')" value="tareas"><TasksTab :case-id="id" /></TabPanel>
+          <TabPanel v-if="can('case-grants.manage')" value="acceso"><AccessTab :case-id="id" /></TabPanel>
         </TabPanels>
       </Tabs>
 
-      <ConfirmActionDialog
-        v-model:visible="closeOpen" header="Cerrar caso" confirm-label="Cerrar caso" action-name="el cierre del caso"
-        :message="`El caso ${item.folio} pasará a casos cerrados y quedará en modo de solo lectura. Verifique que las medidas y seguimientos estén finalizados.`"
-        :action="() => submitResource('cases', 'PATCH', `/${item.id}/close`)"
-      />
+      <EditCaseDialog v-model:visible="editOpen" :case-record="record" @reload="reload" />
+      <AssignCaseDialog v-model:visible="assignOpen" :case-record="record" @reload="reload" />
+      <TransitionDialog v-model:visible="transitionOpen" :case-record="record" :target="target" @reload="reload" />
     </template>
-  </ResourceDetailShell>
+    <div v-else class="rounded-xl border border-slate-200 bg-white">
+      <h1 class="sr-only">Expediente no disponible</h1>
+      <EmptyState v-if="isNotFound(query.error.value)" icon="search" title="No se encontró el expediente" description="El expediente no existe o usted no tiene acceso a él." />
+      <ErrorState v-else :error="query.error.value" subject="el expediente" @retry="reload" />
+    </div>
+  </div>
 </template>

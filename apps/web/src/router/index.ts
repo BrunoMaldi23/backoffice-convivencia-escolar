@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, START_LOCATION, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router';
 import { ensureSession } from '@/composables/useSession';
 import { safeRedirect } from '@/lib/redirect';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -17,30 +17,13 @@ type Crumb = { label: string; to?: RouteLocationRaw };
 const page = (title: string, parents: Crumb[] = [], extra: Partial<RouteRecordRaw['meta']> = {}) => ({ title, breadcrumb: [...parents, { label: title }], ...extra });
 
 const CASES: Crumb = { label: 'Casos', to: '/casos' };
-const COMPLAINTS: Crumb = { label: 'Denuncias', to: '/denuncias' };
-const MEASURES: Crumb = { label: 'Medidas de resguardo', to: '/medidas' };
-const PROTOCOLS: Crumb = { label: 'Protocolos', to: '/protocolos' };
-const FOLLOWUPS: Crumb = { label: 'Seguimientos', to: '/seguimientos' };
-const TASKS: Crumb = { label: 'Tareas', to: '/tareas' };
-const INTERVIEWS: Crumb = { label: 'Entrevistas', to: '/entrevistas' };
-const CITATIONS: Crumb = { label: 'Citaciones', to: '/citaciones' };
-const REFERRALS: Crumb = { label: 'Derivaciones', to: '/derivaciones' };
-const DOCUMENTS: Crumb = { label: 'Documentos', to: '/documentos' };
 const ADMIN: Crumb = { label: 'Administración' };
-const USERS: Crumb = { label: 'Usuarios', to: '/administracion/usuarios' };
-const ROLES: Crumb = { label: 'Roles y permisos', to: '/administracion/roles' };
 
-/** Comunidad educativa: cuatro módulos que comparten vistas parametrizadas por entidad. */
-const community = (['students', 'guardians', 'staff', 'courses'] as const).flatMap((entity) => {
-  const base = { students: 'estudiantes', guardians: 'apoderados', staff: 'funcionarios', courses: 'cursos' }[entity];
-  const label = { students: 'Estudiantes', guardians: 'Apoderados', staff: 'Funcionarios', courses: 'Cursos' }[entity];
-  const parent: Crumb = { label, to: `/${base}` };
-  return [
-    { path: base, name: `${entity}`, component: () => import('@/modules/community/CommunityListView.vue'), props: { entity }, meta: page(label) },
-    { path: `${base}/nuevo`, name: `${entity}-new`, component: () => import('@/modules/community/CommunityFormView.vue'), props: { entity }, meta: page('Nuevo registro', [parent]) },
-    { path: `${base}/:id`, name: `${entity}-detail`, component: () => import('@/modules/community/CommunityDetailView.vue'), props: (r: { params: { id: string } }) => ({ entity, id: r.params.id }), meta: page('Detalle', [parent]) }
-  ] satisfies RouteRecordRaw[];
-});
+/** Módulos que todavía no tienen API en el backend: una sola vista explica qué falta (ver docs/frontend/api-integration.md). */
+const pendingModules = [
+  ['estudiantes', 'students', 'Estudiantes'], ['apoderados', 'guardians', 'Apoderados'], ['funcionarios', 'staff', 'Funcionarios'],
+  ['cursos', 'courses', 'Cursos'], ['citaciones', 'citations', 'Citaciones'], ['derivaciones', 'referrals', 'Derivaciones']
+] as const;
 
 /**
  * Cada pantalla pública tiene su propio padre con `AuthLayout`. Un padre común en `/` competiría con el
@@ -64,57 +47,31 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', name: 'dashboard', component: () => import('@/modules/dashboard/DashboardView.vue'), meta: page('Panel de inicio') },
 
-      { path: 'casos', name: 'cases', component: () => import('@/modules/cases/CasesListView.vue'), meta: page('Casos') },
-      { path: 'casos/cerrados', name: 'cases-closed', component: () => import('@/modules/cases/ClosedCasesView.vue'), meta: page('Casos cerrados', [CASES]) },
-      { path: 'casos/nuevo', name: 'cases-new', component: () => import('@/modules/cases/CaseFormView.vue'), meta: page('Nuevo caso', [CASES]) },
-      { path: 'casos/:id', name: 'cases-detail', component: () => import('@/modules/cases/CaseDetailView.vue'), props: true, meta: page('Expediente', [CASES]) },
-      { path: 'casos/:id/editar', name: 'cases-edit', component: () => import('@/modules/cases/CaseFormView.vue'), props: true, meta: page('Editar caso', [CASES]) },
+      { path: 'casos', name: 'cases', component: () => import('@/modules/cases/CasesListView.vue'), meta: page('Casos', [], { permission: 'cases.read' }) },
+      { path: 'casos/nuevo', name: 'cases-new', component: () => import('@/modules/cases/CaseCreateView.vue'), meta: page('Nuevo caso', [CASES], { permission: 'cases.create' }) },
+      { path: 'casos/:id', name: 'cases-detail', component: () => import('@/modules/cases/CaseDetailView.vue'), props: true, meta: page('Expediente', [CASES], { permission: 'cases.read' }) },
 
-      { path: 'denuncias', name: 'complaints', component: () => import('@/modules/complaints/ComplaintsListView.vue'), meta: page('Denuncias') },
-      { path: 'denuncias/nueva', name: 'complaints-new', component: () => import('@/modules/complaints/ComplaintFormView.vue'), meta: page('Nueva denuncia', [COMPLAINTS]) },
-      { path: 'denuncias/:id', name: 'complaints-detail', component: () => import('@/modules/complaints/ComplaintDetailView.vue'), props: true, meta: page('Detalle de denuncia', [COMPLAINTS]) },
+      { path: 'denuncias', name: 'complaints', component: () => import('@/modules/complaints/ComplaintsView.vue'), meta: page('Denuncias', [], { permission: 'reports.read' }) },
+      { path: 'denuncias/nueva', name: 'complaints-new', component: () => import('@/modules/cases/CaseCreateView.vue'), props: { withReport: true }, meta: page('Registrar denuncia', [{ label: 'Denuncias', to: '/denuncias' }], { permission: 'reports.create' }) },
+      { path: 'medidas', name: 'measures', component: () => import('@/modules/measures/MeasuresView.vue'), meta: page('Medidas de resguardo', [], { permission: 'measures.read' }) },
+      { path: 'protocolos', name: 'protocols', component: () => import('@/modules/protocols/ProtocolsView.vue'), meta: page('Protocolos', [], { permission: 'protocols.read' }) },
+      { path: 'seguimientos', name: 'followups', component: () => import('@/modules/followups/FollowUpsView.vue'), meta: page('Seguimientos', [], { permission: 'follow-ups.read' }) },
 
-      { path: 'medidas', name: 'measures', component: () => import('@/modules/measures/MeasuresListView.vue'), meta: page('Medidas de resguardo') },
-      { path: 'medidas/nueva', name: 'measures-new', component: () => import('@/modules/measures/MeasureFormView.vue'), meta: page('Nueva medida', [MEASURES]) },
-      { path: 'medidas/:id', name: 'measures-detail', component: () => import('@/modules/measures/MeasureDetailView.vue'), props: true, meta: page('Detalle de medida', [MEASURES]) },
+      { path: 'tareas', name: 'tasks', component: () => import('@/modules/tasks/TasksView.vue'), meta: page('Tareas', [], { permission: 'tasks.read' }) },
+      { path: 'entrevistas', name: 'interviews', component: () => import('@/modules/interviews/InterviewsView.vue'), meta: page('Entrevistas', [], { permission: 'interviews.read' }) },
+      { path: 'calendario', name: 'calendar', component: () => import('@/modules/calendar/CalendarView.vue'), meta: page('Calendario', [], { permission: 'cases.read' }) },
+      { path: 'documentos', name: 'documents', component: () => import('@/modules/documents/DocumentsView.vue'), meta: page('Documentos', [], { permission: 'documents.read' }) },
+      { path: 'reportes', name: 'reports', component: () => import('@/modules/reports/ReportsView.vue'), meta: page('Reportes', [], { permission: 'cases.read' }) },
+      { path: 'notificaciones', name: 'notifications', component: () => import('@/modules/notifications/NotificationsView.vue'), meta: page('Notificaciones', [], { permission: 'notifications.read' }) },
 
-      { path: 'protocolos', name: 'protocols', component: () => import('@/modules/protocols/ProtocolsView.vue'), meta: page('Protocolos') },
-      { path: 'protocolos/:id', name: 'protocols-detail', component: () => import('@/modules/protocols/ProtocolDetailView.vue'), props: true, meta: page('Detalle de protocolo', [PROTOCOLS]) },
+      ...pendingModules.map(([path, module, title]): RouteRecordRaw => ({
+        path, name: module, component: () => import('@/modules/pending/PendingModuleView.vue'), props: { module }, meta: page(title)
+      })),
 
-      { path: 'seguimientos', name: 'followups', component: () => import('@/modules/followups/FollowUpsView.vue'), meta: page('Seguimientos') },
-      { path: 'seguimientos/:id', name: 'followups-detail', component: () => import('@/modules/followups/FollowUpDetailView.vue'), props: true, meta: page('Detalle de seguimiento', [FOLLOWUPS]) },
-
-      ...community,
-
-      { path: 'tareas', name: 'tasks', component: () => import('@/modules/tasks/TasksView.vue'), meta: page('Tareas') },
-      { path: 'tareas/nueva', name: 'tasks-new', component: () => import('@/modules/tasks/TaskFormView.vue'), meta: page('Nueva tarea', [TASKS]) },
-      { path: 'tareas/:id', name: 'tasks-detail', component: () => import('@/modules/tasks/TaskDetailView.vue'), props: true, meta: page('Detalle de tarea', [TASKS]) },
-
-      { path: 'entrevistas', name: 'interviews', component: () => import('@/modules/interviews/InterviewsListView.vue'), meta: page('Entrevistas') },
-      { path: 'entrevistas/nueva', name: 'interviews-new', component: () => import('@/modules/interviews/InterviewFormView.vue'), meta: page('Nueva entrevista', [INTERVIEWS]) },
-      { path: 'entrevistas/:id', name: 'interviews-detail', component: () => import('@/modules/interviews/InterviewDetailView.vue'), props: true, meta: page('Detalle de entrevista', [INTERVIEWS]) },
-
-      { path: 'citaciones', name: 'citations', component: () => import('@/modules/citations/CitationsListView.vue'), meta: page('Citaciones') },
-      { path: 'citaciones/nueva', name: 'citations-new', component: () => import('@/modules/citations/CitationFormView.vue'), meta: page('Nueva citación', [CITATIONS]) },
-      { path: 'citaciones/:id', name: 'citations-detail', component: () => import('@/modules/citations/CitationDetailView.vue'), props: true, meta: page('Detalle de citación', [CITATIONS]) },
-
-      { path: 'calendario', name: 'calendar', component: () => import('@/modules/calendar/CalendarView.vue'), meta: page('Calendario') },
-
-      { path: 'derivaciones', name: 'referrals', component: () => import('@/modules/referrals/ReferralsListView.vue'), meta: page('Derivaciones') },
-      { path: 'derivaciones/nueva', name: 'referrals-new', component: () => import('@/modules/referrals/ReferralFormView.vue'), meta: page('Nueva derivación', [REFERRALS]) },
-      { path: 'derivaciones/:id', name: 'referrals-detail', component: () => import('@/modules/referrals/ReferralDetailView.vue'), props: true, meta: page('Detalle de derivación', [REFERRALS]) },
-
-      { path: 'documentos', name: 'documents', component: () => import('@/modules/documents/DocumentsView.vue'), meta: page('Documentos') },
-      { path: 'documentos/:id', name: 'documents-detail', component: () => import('@/modules/documents/DocumentDetailView.vue'), props: true, meta: page('Detalle de documento', [DOCUMENTS]) },
-
-      { path: 'reportes', name: 'reports', component: () => import('@/modules/reports/ReportsView.vue'), meta: page('Reportes') },
-
-      { path: 'administracion/usuarios', name: 'users', component: () => import('@/modules/users/UsersListView.vue'), meta: page('Usuarios', [ADMIN], { permission: 'users.read' }) },
-      { path: 'administracion/usuarios/nuevo', name: 'users-new', component: () => import('@/modules/users/UserFormView.vue'), meta: page('Nuevo usuario', [ADMIN, USERS], { permission: 'users.create' }) },
-      { path: 'administracion/usuarios/:id', name: 'users-detail', component: () => import('@/modules/users/UserDetailView.vue'), props: true, meta: page('Detalle de usuario', [ADMIN, USERS], { permission: 'users.read' }) },
-      { path: 'administracion/usuarios/:id/editar', name: 'users-edit', component: () => import('@/modules/users/UserFormView.vue'), props: true, meta: page('Editar usuario', [ADMIN, USERS], { permission: 'users.update' }) },
+      { path: 'administracion/usuarios', name: 'users', component: () => import('@/modules/users/UsersView.vue'), meta: page('Usuarios', [ADMIN], { permission: 'users.read' }) },
+      { path: 'administracion/usuarios/:id', name: 'users-detail', component: () => import('@/modules/users/UserDetailView.vue'), props: true, meta: page('Detalle de usuario', [ADMIN, { label: 'Usuarios', to: '/administracion/usuarios' }], { permission: 'users.read' }) },
       { path: 'administracion/roles', name: 'roles', component: () => import('@/modules/roles/RolesView.vue'), meta: page('Roles y permisos', [ADMIN], { permission: 'roles.read' }) },
-      { path: 'administracion/roles/:id', name: 'roles-detail', component: () => import('@/modules/roles/RoleDetailView.vue'), props: true, meta: page('Detalle de rol', [ADMIN, ROLES], { permission: 'roles.read' }) },
+      { path: 'administracion/establecimientos', name: 'establishments', component: () => import('@/modules/institutions/EstablishmentsView.vue'), meta: page('Establecimientos', [ADMIN], { permission: 'institutions.read' }) },
       { path: 'administracion/auditoria', name: 'audit', component: () => import('@/modules/audit/AuditView.vue'), meta: page('Auditoría', [ADMIN], { permission: 'audit.read' }) },
       { path: 'configuracion', name: 'settings', component: () => import('@/modules/settings/SettingsView.vue'), meta: page('Configuración') },
       { path: 'configuracion/estado-servicio', name: 'system-status', component: () => import('@/modules/HomeView.vue'), meta: page('Estado del servicio', [{ label: 'Configuración', to: '/configuracion' }]) }
@@ -129,14 +86,8 @@ const router = createRouter({
   scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 }
 });
 
-router.beforeEach(async (to, from) => {
-  // Previsualización: la aplicación arranca en el ingreso, igual que en producción. Desde allí un enlace
-  // exclusivo del modo de desarrollo permite entrar al panel sin sesión. En producción `__UI_PREVIEW__` es el
-  // literal false: este bloque se elimina y ninguna ruta privada se abre sin sesión.
-  if (__UI_PREVIEW__ && from === START_LOCATION && to.path === '/') return { name: 'login' };
-  if (__UI_PREVIEW__) return true;
-
-  // Quien ya tiene sesión no vuelve a ver el ingreso. Si la API no responde, se muestra el formulario igualmente.
+router.beforeEach(async (to) => {
+  // Quien ya tiene sesión no vuelve al ingreso. Si la API no responde, se muestra el formulario igualmente.
   if (to.name === 'login') {
     try {
       if (await ensureSession()) return safeRedirect(to.query.redirect);

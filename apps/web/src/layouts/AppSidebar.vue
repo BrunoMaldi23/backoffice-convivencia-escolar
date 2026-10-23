@@ -10,14 +10,11 @@ import { NAVIGATION, type NavItem } from '@/router/navigation';
 const props = withDefaults(defineProps<{ rail?: boolean }>(), { rail: false });
 const emit = defineEmits<{ navigate: [] }>();
 const route = useRoute();
-const { can, isPreview } = useSession();
+const { can } = useSession();
 
-/** En previsualización se muestran los ítems restringidos con candado; con sesión real, solo los permitidos. */
-const groups = computed(() =>
-  NAVIGATION.map((g) => ({ ...g, items: g.items.filter((i) => isPreview || can(i.permission)) })).filter((g) => g.items.length)
-);
+/** Solo se muestran las opciones que el rol puede usar según la matriz inicial; los módulos sin API se marcan como pendientes. */
+const groups = computed(() => NAVIGATION.map((g) => ({ ...g, items: g.items.filter((i) => can(i.permission)) })).filter((g) => g.items.length));
 const isActive = (item: NavItem) => (item.to === '/' ? route.path === '/' : route.path === item.to || route.path.startsWith(`${item.to}/`));
-const restricted = (item: NavItem) => Boolean(item.permission) && !can(item.permission);
 const linkClass = (item: NavItem) => [
   'group flex items-center gap-3 rounded-lg text-sm transition-colors',
   props.rail ? 'h-10 w-10 justify-center' : 'px-3 py-2',
@@ -42,21 +39,17 @@ const linkClass = (item: NavItem) => [
           <li v-for="item in group.items" :key="item.to">
             <RouterLink
               :to="item.to" :class="linkClass(item)" :aria-current="isActive(item) ? 'page' : undefined"
-              :aria-label="rail ? item.label : undefined" :title="rail ? item.label : undefined" @click="emit('navigate')"
+              :aria-label="rail ? `${item.label}${item.pending ? ' (pendiente)' : ''}` : undefined" :title="rail ? item.label : undefined" @click="emit('navigate')"
             >
               <AppIcon :name="item.icon" :size="18" :class="isActive(item) ? 'text-sky-700' : 'text-slate-500 group-hover:text-slate-700'" />
               <template v-if="!rail">
                 <span class="flex-1 truncate">{{ item.label }}</span>
-                <AppIcon v-if="restricted(item)" name="lock" :size="14" class="text-slate-400" label="Requiere permiso" />
+                <span v-if="item.pending" class="rounded bg-slate-100 px-1.5 py-0.5 text-[0.6875rem] font-medium text-slate-600">Pendiente</span>
               </template>
             </RouterLink>
           </li>
         </ul>
       </div>
     </nav>
-
-    <p v-if="!rail && isPreview" class="border-t border-slate-200 px-5 py-3 text-xs leading-relaxed text-slate-500">
-      Los ítems con candado requieren permisos que se validarán con el sistema de roles.
-    </p>
   </div>
 </template>

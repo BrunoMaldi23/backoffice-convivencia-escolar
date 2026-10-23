@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
 import Select from 'primevue/select';
@@ -7,63 +7,80 @@ import AppIcon from '@/components/AppIcon.vue';
 import BarChart from '@/components/BarChart.vue';
 import FormField from '@/components/FormField.vue';
 import PageHeader from '@/components/PageHeader.vue';
-import PreviewBadge from '@/components/PreviewBadge.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
-import { useResource } from '@/composables/useResource';
-import { isUiPreview } from '@/config/preview';
+import { useAllCases } from '@/composables/useCases';
+import { CATEGORY_OPTIONS, categoryLabel } from '@/lib/catalogs';
 import { formatNumber } from '@/lib/format';
-import { CASE_TYPES } from '../cases/cases.config';
+import { casesByMonth, computeCaseMetrics } from '@/lib/metrics';
+import { priorityOf, statusOf } from '@/lib/status';
 
-/** Reportes. Sin endpoint de estadísticas, solo se muestran datos de demostración en previsualización, nunca como cifras oficiales. */
-const query = useResource('dashboard');
-const range = ref<Date[] | null>(null);
+/**
+ * Reportes calculados con los expedientes autorizados (la API no tiene endpoints de estadísticas ni de exportación). Los filtros de
+ * período y categoría se aplican sobre la fecha de recepción; los resultados corresponden solo a los expedientes consultados.
+ */
+const query = useAllCases();
+const range = ref<(Date | null)[] | null>(null);
 const category = ref<string | null>(null);
+
+const filtered = computed(() => {
+  const [from, to] = range.value ?? [];
+  return (query.data.value?.items ?? []).filter((c) => {
+    const at = new Date(c.receivedAt).getTime();
+    return (!from || at >= from.getTime()) && (!to || at <= to.getTime() + 86_399_999) && (!category.value || c.categoryCode === category.value);
+  });
+});
+const metrics = computed(() => computeCaseMetrics(filtered.value));
+const tally = (key: (c: (typeof filtered.value)[number]) => string, label: (code: string) => string) => {
+  const counts = new Map<string, number>();
+  for (const c of filtered.value) counts.set(key(c), (counts.get(key(c)) ?? 0) + 1);
+  return [...counts].map(([code, value]) => ({ label: label(code), value })).sort((a, b) => b.value - a.value);
+};
+const byStatus = computed(() => Object.entries(metrics.value.byStatus).map(([code, value]) => ({ label: statusOf(code).label, value })));
+const byCategory = computed(() => tally((c) => c.categoryCode, categoryLabel));
+const byPriority = computed(() => tally((c) => c.priority, (code) => priorityOf(code).label));
+const byMonth = computed(() => casesByMonth(filtered.value));
+const summary = computed(() => [
+  ['Expedientes en el período', filtered.value.length], ['Activos', metrics.value.active.length], ['Cerrados', metrics.value.closed],
+  ['Activos con prioridad crítica', metrics.value.critical.length], ['Activos con la próxima acción vencida', metrics.value.overdueActions.length]
+] as const);
 </script>
 
 <template>
   <div>
-    <PageHeader title="Reportes" description="Indicadores de convivencia escolar por período y categoría.">
-      <template #badges><PreviewBadge /></template>
+    <PageHeader title="Reportes" description="Indicadores de convivencia escolar calculados con los expedientes a los que usted tiene acceso.">
       <template #actions>
-        <Button label="Exportar" severity="secondary" outlined disabled title="La exportación se generará en el servidor"><template #icon><AppIcon name="download" :size="16" /></template></Button>
+        <Button label="Exportar" severity="secondary" outlined disabled title="La API todavía no ofrece exportación"><template #icon><AppIcon name="download" :size="16" /></template></Button>
       </template>
     </PageHeader>
 
-    <div class="mb-6 grid gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[18rem_16rem_auto] lg:items-end">
-      <FormField id="rep-periodo" label="Período">
-        <template #default="{ id }"><DatePicker v-model="range" :input-id="id" selection-mode="range" date-format="dd-mm-yy" placeholder="dd-mm-aaaa — dd-mm-aaaa" show-icon icon-display="input" class="w-full" /></template>
+    <div class="mb-4 grid gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[18rem_16rem_1fr] lg:items-end">
+      <FormField id="rep-periodo" label="Período de recepción">
+        <template #default="{ id }"><DatePicker v-model="range" :input-id="id" selection-mode="range" date-format="dd-mm-yy" placeholder="Todo el historial" show-icon icon-display="input" show-button-bar class="w-full" /></template>
       </FormField>
       <FormField id="rep-categoria" label="Categoría">
-        <template #default="{ id }"><Select v-model="category" :input-id="id" :options="CASE_TYPES" placeholder="Todas" show-clear class="w-full" /></template>
+        <template #default="{ id }"><Select v-model="category" :input-id="id" :options="CATEGORY_OPTIONS" option-label="label" option-value="value" placeholder="Todas" show-clear class="w-full" /></template>
       </FormField>
-      <p class="text-xs leading-relaxed text-slate-500">Los filtros se aplicarán en el servidor al conectar el servicio de estadísticas.</p>
+      <p class="text-xs leading-relaxed text-slate-500">La exportación requiere un endpoint del servidor que aún no existe. Los datos se calculan en el navegador con los expedientes consultados<span v-if="query.data.value?.truncated"> ({{ query.data.value.items.length }} de {{ query.data.value.total }})</span>.</p>
     </div>
 
-    <p v-if="isUiPreview" class="mb-4 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-      Cifras sintéticas para revisar el diseño. No son estadísticas oficiales del establecimiento.
-    </p>
-
-    <div :class="query.data.value ? '' : 'rounded-xl border border-slate-200 bg-white'">
-      <QueryState :data="query.data.value" :is-pending="query.isPending.value" :error="query.error.value" subject="los reportes" @retry="query.refetch()">
-        <template #default="{ data }">
-          <div class="grid gap-6 lg:grid-cols-2">
-            <SectionCard title="Casos ingresados por mes"><BarChart :data="data.trend" title="Casos ingresados" /></SectionCard>
-            <SectionCard title="Casos activos por tipo"><BarChart :data="data.byType" title="Casos por tipo de situación" horizontal /></SectionCard>
-            <SectionCard title="Resumen del período" flush class="lg:col-span-2">
-              <table class="w-full text-sm">
-                <caption class="sr-only">Resumen de indicadores del período</caption>
-                <thead><tr class="border-b border-slate-200 bg-slate-50 text-left text-slate-600"><th class="px-5 py-2.5 font-semibold">Indicador</th><th class="px-5 py-2.5 text-right font-semibold">Valor</th></tr></thead>
-                <tbody>
-                  <tr v-for="[label, value] in [['Casos activos', data.stats.activeCases], ['Casos nuevos', data.stats.newCases], ['Casos críticos', data.stats.criticalCases], ['Casos cerrados', data.stats.closedCases], ['Medidas pendientes', data.stats.pendingMeasures], ['Tareas vencidas', data.stats.overdueTasks]] as const" :key="label" class="border-b border-slate-100 last:border-0">
-                    <td class="px-5 py-2.5 text-slate-700">{{ label }}</td><td class="px-5 py-2.5 text-right tabular-nums text-slate-900">{{ formatNumber(value) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </SectionCard>
-          </div>
-        </template>
-      </QueryState>
-    </div>
+    <QueryState :data="query.data.value?.items" :is-pending="query.isPending.value" :error="query.error.value" subject="los reportes" empty-icon="chart" empty-title="Aún no hay expedientes" empty-description="Los reportes se calculan a partir de los expedientes registrados." @retry="query.refetch()">
+      <template #default>
+        <div class="grid gap-4 lg:grid-cols-2">
+          <SectionCard dense title="Resumen del período" flush class="lg:col-span-2">
+            <table class="w-full text-sm">
+              <caption class="sr-only">Resumen de indicadores del período</caption>
+              <tbody>
+                <tr v-for="[label, value] in summary" :key="label" class="border-b border-slate-100 last:border-0"><th scope="row" class="px-4 py-2 text-left font-normal text-slate-700">{{ label }}</th><td class="px-4 py-2 text-right tabular-nums text-slate-900">{{ formatNumber(value) }}</td></tr>
+              </tbody>
+            </table>
+          </SectionCard>
+          <SectionCard dense title="Expedientes por estado"><BarChart :data="byStatus" title="Expedientes por estado" horizontal /></SectionCard>
+          <SectionCard dense title="Expedientes por mes de recepción"><BarChart :data="byMonth" title="Expedientes recibidos" height-class="h-32" /></SectionCard>
+          <SectionCard dense title="Por categoría"><BarChart v-if="byCategory.length" :data="byCategory" title="Expedientes por categoría" horizontal /><p v-else class="text-sm text-slate-600">Sin expedientes en el período.</p></SectionCard>
+          <SectionCard dense title="Por prioridad"><BarChart v-if="byPriority.length" :data="byPriority" title="Expedientes por prioridad" horizontal /><p v-else class="text-sm text-slate-600">Sin expedientes en el período.</p></SectionCard>
+        </div>
+      </template>
+    </QueryState>
   </div>
 </template>

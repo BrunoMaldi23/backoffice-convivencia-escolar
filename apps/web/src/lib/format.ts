@@ -40,3 +40,23 @@ export function formatNumber(value: number): string {
 export function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 }
+
+/**
+ * Convierte la fecha elegida en un `DatePicker` a ISO-8601 para la API. Sin hora (`withTime` falso) se usa el mediodía local
+ * para que la fecha no cambie de día al mostrarse en otra zona horaria.
+ */
+export function dateToIso(date: Date, withTime = false): string {
+  const copy = new Date(date);
+  if (!withTime) copy.setHours(12, 0, 0, 0);
+  return copy.toISOString();
+}
+
+/** Fecha ISO de la API a `Date` para un `DatePicker`; `null` si no hay valor. */
+export function isoToDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Plazo vencido: la fecha ya pasó (compara contra `now`). */
+export const isOverdue = (value: string | null | undefined, now = new Date()) => Boolean(value) && new Date(value as string).getTime() < now.getTime();

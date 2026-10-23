@@ -5,7 +5,7 @@ import { isUiPreview } from '@/config/preview';
 import { roleHintAllows } from '@/lib/access';
 import { queryClient } from '@/lib/queryClient';
 import * as auth from '@/services/auth';
-import type { SessionUser } from '@/types/models';
+import type { SessionUser } from '@/types/api';
 
 export const SESSION_KEY = ['auth', 'session'] as const;
 

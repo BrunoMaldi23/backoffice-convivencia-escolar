@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router';
+import { RouterView } from 'vue-router';
 import { isUiPreview } from '@/config/preview';
 import InstitutionLogo from '@/components/InstitutionLogo.vue';
 
@@ -45,8 +45,7 @@ import InstitutionLogo from '@/components/InstitutionLogo.vue';
       </svg>
       <div class="w-full max-w-[26rem] rounded-3xl bg-white p-6 shadow-[0_24px_64px_-20px_rgba(16,37,107,0.28)] ring-1 ring-slate-900/5 sm:p-8"><RouterView /></div>
       <p v-if="isUiPreview" class="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full border border-dashed border-amber-400 bg-amber-50 px-3.5 py-1.5 text-center text-xs text-amber-900">
-        <strong class="font-semibold">Previsualización.</strong> Sin sesión real.
-        <RouterLink to="/" class="font-medium underline">Ver el panel con datos de demostración</RouterLink>
+        <strong class="font-semibold">Previsualización.</strong> API simulada, sin inicio de sesión real. Recargue la página para volver a la sesión sintética.
       </p>
     </main>
   </div>

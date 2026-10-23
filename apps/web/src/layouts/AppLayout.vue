@@ -39,7 +39,7 @@ if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1279px)').ma
     <div :class="['flex min-h-screen flex-col', collapsed ? 'md:pl-16' : 'md:pl-64']">
       <AppHeader />
       <div v-if="isUiPreview" class="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 sm:px-6" role="note">
-        <strong class="font-semibold">Modo previsualización.</strong> Datos sintéticos, sin sesión ni conexión con el servidor. Este modo no existe en la compilación de producción.
+        <strong class="font-semibold">Modo previsualización.</strong> API simulada con datos sintéticos y sesión sintética: nada se guarda ni se envía al servidor. Este modo no existe en la compilación de producción.
       </div>
       <main id="contenido" tabindex="-1" class="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <RouterView />

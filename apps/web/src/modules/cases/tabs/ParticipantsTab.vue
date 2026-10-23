@@ -1,0 +1,85 @@
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue';
+import Button from 'primevue/button';
+import InputText from 'primevue/inputtext';
+import Select from 'primevue/select';
+import AppIcon from '@/components/AppIcon.vue';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
+import FormField from '@/components/FormField.vue';
+import MutationDialog from '@/components/MutationDialog.vue';
+import QueryState from '@/components/QueryState.vue';
+import SectionCard from '@/components/SectionCard.vue';
+import { useCaseParticipants, useCreateParticipant, useUnlinkParticipant } from '@/composables/useCaseContent';
+import { useSession } from '@/composables/useSession';
+import { PARTICIPANT_KIND_OPTIONS, PARTICIPATION_OPTIONS, participantKindLabel, participationLabel } from '@/lib/catalogs';
+import { formatDate } from '@/lib/format';
+import { maxLength, minLength, required, validateAll } from '@/lib/validation';
+import type { CaseParticipantLink, CaseRecord, ParticipantKind } from '@/types/api';
+
+/**
+ * Involucrados del expediente. La API permite crear un involucrado (`POST /participants`), asociarlo al caso y desvincularlo.
+ * No existe un listado de involucrados del establecimiento, por lo que no se pueden reutilizar los ya creados: cada alta crea
+ * el involucrado y lo asocia. El "identificador de referencia" es un texto libre: use un código interno, no datos de contacto.
+ */
+const props = defineProps<{ caseRecord: CaseRecord }>();
+const { can } = useSession();
+const query = useCaseParticipants(() => props.caseRecord.id);
+const create = useCreateParticipant(props.caseRecord.id);
+const unlink = useUnlinkParticipant(props.caseRecord.id);
+
+const open = ref(false);
+const toUnlink = ref<CaseParticipantLink | null>(null);
+const unlinkOpen = computed({ get: () => Boolean(toUnlink.value), set: (v: boolean) => { if (!v) toUnlink.value = null; } });
+const form = reactive({ kind: 'ESTUDIANTE' as ParticipantKind | null, label: '', code: 'AFECTADO' as string | null });
+const errors = ref<Record<string, string>>({});
+
+function openForm() { Object.assign(form, { kind: 'ESTUDIANTE', label: '', code: 'AFECTADO' }); errors.value = {}; create.reset(); open.value = true; }
+async function submit() {
+  errors.value = validateAll(form, { kind: [required('Seleccione el tipo de involucrado.')], label: [required('Escriba el identificador de referencia.'), minLength(2), maxLength(160)], code: [required('Seleccione la participación.')] }) as Record<string, string>;
+  if (Object.keys(errors.value).length) return;
+  try {
+    await create.mutateAsync({ establishmentId: props.caseRecord.establishmentId, kind: form.kind!, referenceLabel: form.label.trim(), participationCode: form.code! });
+    open.value = false;
+  } catch { /* el error se muestra en el diálogo */ }
+}
+</script>
+
+<template>
+  <SectionCard dense title="Involucrados" description="Personas vinculadas al caso y su participación.">
+    <template v-if="can('participants.manage')" #actions>
+      <Button label="Agregar involucrado" size="small" @click="openForm"><template #icon><AppIcon name="user-plus" :size="15" /></template></Button>
+    </template>
+    <QueryState :data="query.data.value" :is-pending="query.isPending.value" :error="query.error.value" compact empty-title="Sin involucrados" empty-description="Agregue a las personas involucradas usando un código interno de referencia." empty-icon="users" subject="los involucrados" @retry="query.refetch()">
+      <template #default="{ data }">
+        <ul class="divide-y divide-slate-100">
+          <li v-for="link in data" :key="link.id" class="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+            <div class="min-w-0">
+              <p class="break-words text-sm font-medium text-slate-900">{{ link.participant.referenceLabel }}</p>
+              <p class="mt-0.5 text-xs text-slate-500">{{ participantKindLabel(link.participant.kind) }} · {{ participationLabel(link.participationCode) }} · asociado el {{ formatDate(link.linkedAt) }}</p>
+            </div>
+            <Button v-if="can('participants.manage')" label="Desvincular" size="small" severity="danger" text @click="toUnlink = link" />
+          </li>
+        </ul>
+      </template>
+    </QueryState>
+  </SectionCard>
+
+  <MutationDialog v-model:visible="open" header="Agregar involucrado" submit-label="Agregar" :pending="create.isPending.value" :error="create.error.value" @submit="submit" @reload="query.refetch()">
+    <p class="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900">Use un código interno o iniciales como identificador. No escriba teléfonos, direcciones ni otros datos de contacto.</p>
+    <FormField id="pt-kind" label="Tipo" required :error="errors.kind">
+      <template #default="{ id, invalid }"><Select v-model="form.kind" :input-id="id" :options="PARTICIPANT_KIND_OPTIONS" option-label="label" option-value="value" :invalid="invalid" class="w-full" /></template>
+    </FormField>
+    <FormField id="pt-label" label="Identificador de referencia" required :error="errors.label">
+      <template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.label" maxlength="160" :invalid="invalid" :aria-describedby="describedby" autocomplete="off" class="w-full" /></template>
+    </FormField>
+    <FormField id="pt-code" label="Participación en el caso" required :error="errors.code">
+      <template #default="{ id, invalid }"><Select v-model="form.code" :input-id="id" :options="PARTICIPATION_OPTIONS" option-label="label" option-value="value" :invalid="invalid" class="w-full" /></template>
+    </FormField>
+  </MutationDialog>
+
+  <ConfirmActionDialog
+    v-model:visible="unlinkOpen" header="Desvincular involucrado" confirm-label="Desvincular" danger
+    :message="`Se quitará a «${toUnlink?.participant.referenceLabel ?? ''}» de este expediente. La asociación queda en el historial.`"
+    :action="() => unlink.mutateAsync(toUnlink!.id)"
+  />
+</template>

@@ -138,8 +138,12 @@ describe('opciones del menú según roles', () => {
     expect(roleHintAllows(['DOCENTE'], 'audit.read')).toBe(false);
     expect(roleHintAllows(['SYSTEM_ADMIN'], 'roles.assign')).toBe(true);
     expect(roleHintAllows([], undefined)).toBe(true);
+    expect(roleHintAllows(['DOCENTE'], 'cases.read')).toBe(false);
+    expect(roleHintAllows(['CONVIVENCIA'], 'cases.close')).toBe(true);
+    expect(roleHintAllows(['INSPECTOR_GENERAL'], 'cases.close')).toBe(false);
+    expect(roleHintAllows(['DIRECTOR'], 'cases.read')).toBe(false);
     // Un permiso que la tabla no conoce nunca se oculta: decide el servidor.
-    expect(roleHintAllows(['DOCENTE'], 'cases.read')).toBe(true);
+    expect(roleHintAllows(['DOCENTE'], 'permiso.futuro')).toBe(true);
   });
 });
 

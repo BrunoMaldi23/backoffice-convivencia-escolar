@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import Popover from 'primevue/popover';
 import AppIcon from '@/components/AppIcon.vue';
-import PendingNotice from '@/components/PendingNotice.vue';
+import ApiErrorMessage from '@/components/ApiErrorMessage.vue';
 import { useLogout, useSession } from '@/composables/useSession';
 import { initials } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
@@ -68,7 +68,7 @@ function signOut() {
             </button>
           </li>
         </ul>
-        <div v-if="logout.error.value" class="px-3 pb-3"><PendingNotice :error="logout.error.value" action="el cierre de sesión" /></div>
+        <div v-if="logout.error.value" class="px-3 pb-3"><ApiErrorMessage :error="logout.error.value" /></div>
       </div>
     </Popover>
   </div>

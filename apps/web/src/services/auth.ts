@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
 import { SessionNotEstablishedError } from '@/lib/errors';
-import type { SessionUser } from '@/types/models';
+import type { SessionUser } from '@/types/api';
 import { api, resetCsrf } from './api';
 
 /**

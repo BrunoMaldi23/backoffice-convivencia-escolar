@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { PRIORITIES } from '@/lib/status';
-import type { Priority } from '@/types/models';
+import { priorityOf } from '@/lib/status';
 
-/** Prioridad con barras de nivel (forma) además del color, para no depender solo del tono. */
-const props = defineProps<{ priority: Priority }>();
-const def = computed(() => PRIORITIES[props.priority]);
+/** Prioridad con barras de nivel (forma) además del color, para no depender solo del tono. Acepta cualquier código de la API. */
+const props = defineProps<{ priority: string }>();
+const def = computed(() => priorityOf(props.priority));
 const barColor = computed(() => ({ neutral: 'bg-slate-500', info: 'bg-sky-600', warning: 'bg-amber-600', danger: 'bg-red-600', success: 'bg-emerald-600', progress: 'bg-indigo-600' })[def.value.tone]);
 </script>
 
