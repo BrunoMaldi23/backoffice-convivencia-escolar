@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+model SystemControl {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("system_control")
+}
+
+model User {
+  id String @id @default(uuid())
+  email String @unique
+  passwordHash String @map("password_hash")
+  displayName String @map("display_name")
+  isActive Boolean @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  roles UserRole[]
+  sessions Session[]
+  resetTokens PasswordResetToken[]
+  @@map("users")
+}
+model Role {
+  id String @id @default(uuid())
+  name String @unique
+  description String?
+  users UserRole[]
+  permissions RolePermission[]
+  @@map("roles")
+}
+model Permission {
+  id String @id @default(uuid())
+  code String @unique
+  description String?
+  roles RolePermission[]
+  @@map("permissions")
+}
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  role Role @relation(fields:[roleId],references:[id],onDelete:Cascade)
+  @@id([userId,roleId])
+  @@map("user_roles")
+}
+model RolePermission {
+  roleId String @map("role_id")
+  permissionId String @map("permission_id")
+  role Role @relation(fields:[roleId],references:[id],onDelete:Cascade)
+  permission Permission @relation(fields:[permissionId],references:[id],onDelete:Cascade)
+  @@id([roleId,permissionId])
+  @@map("role_permissions")
+}
+model Session {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  tokenHash String @unique @map("token_hash")
+  csrfHash String @map("csrf_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  userAgent String? @map("user_agent")
+  ipAddress String? @map("ip_address")
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([userId])
+  @@map("sessions")
+}
+model PasswordResetToken {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  tokenHash String @unique @map("token_hash")
+  purpose String @default("RESET")
+  expiresAt DateTime @map("expires_at")
+  usedAt DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([userId, purpose, usedAt])
+  @@map("password_reset_tokens")
+}
+model SecurityAudit {
+  id String @id @default(uuid())
+  actorUserId String? @map("actor_user_id")
+  action String
+  targetType String @map("target_type")
+  targetId String? @map("target_id")
+  metadata Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([actorUserId,createdAt])
+  @@map("security_audits")
+}

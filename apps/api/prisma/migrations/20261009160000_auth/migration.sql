@@ -1,0 +1,1 @@
+-- Generated from the Prisma schema during Fase 1A.

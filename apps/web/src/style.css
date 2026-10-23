@@ -1,0 +1,39 @@
+/* PrimeVue se ubica entre la base y las utilidades de Tailwind para que las clases utilitarias puedan ajustar sus componentes. */
+@layer theme, base, primevue, components, utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #10256b;
+  --color-brand-dark: #0b1a4f;
+  --color-gold: #d6a21c;
+  --color-action: #0a4a9e;
+  --color-action-dark: #083b80;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text-display: 2.125rem;
+  --text-display--line-height: 1.15;
+  --breakpoint-xs: 30rem;
+}
+
+@layer base {
+  :root { color: var(--color-slate-900); background: var(--color-slate-50); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--color-slate-50); }
+  * { box-sizing: border-box; }
+  :focus-visible { outline: 2px solid var(--color-sky-700); outline-offset: 2px; }
+  ::selection { background: var(--color-sky-100); }
+  h1, h2, h3, h4 { text-wrap: balance; }
+  /* Datos reales largos (nombres, correos, textos sin espacios) no deben ensanchar tarjetas ni encabezados. */
+  h1, h2, h3, h4, p, dd, dt, li, label { overflow-wrap: anywhere; }
+  img, svg { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Ajustes institucionales sobre PrimeVue: tablas más sobrias y encabezados legibles. */
+@layer components {
+  .p-datatable .p-datatable-thead > tr > th { background: var(--color-slate-50); color: var(--color-slate-600); font-size: .8125rem; font-weight: 600; }
+  .p-datatable .p-datatable-tbody > tr > td { font-size: .875rem; }
+  .p-tablist-tab-list { border-color: var(--color-slate-200); }
+  .p-tab { font-size: .875rem; font-weight: 500; padding: .75rem 1rem; white-space: nowrap; }
+}

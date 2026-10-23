@@ -1,0 +1,36 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-ui-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@backoffice/web",
+        "exec",
+        "vite",
+        "--mode",
+        "ui-preview",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "web-prod-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@backoffice/web",
+        "exec",
+        "vite",
+        "preview",
+        "--port",
+        "5175",
+        "--strictPort"
+      ],
+      "port": 5175
+    }
+  ]
+}
