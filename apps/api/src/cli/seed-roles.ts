@@ -1,11 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
 const db = new PrismaClient();
-const permissions = ['dashboard.read', 'users.read', 'users.create', 'users.update', 'users.disable', 'roles.read', 'roles.assign', 'audit.read', 'cases.read', 'cases.create', 'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'institutions.read', 'institutions.manage', 'case-grants.manage'];
+const permissions = ['dashboard.read', 'users.read', 'users.create', 'users.update', 'users.disable', 'roles.read', 'roles.assign', 'audit.read', 'cases.read', 'cases.create', 'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'institutions.read', 'institutions.manage', 'case-grants.manage', 'reports.read', 'reports.create', 'reports.update', 'participants.read', 'participants.manage'];
 const matrix: Record<string, string[]> = {
   SYSTEM_ADMIN: permissions,
   DIRECTOR: ['dashboard.read', 'users.read', 'roles.read', 'audit.read'],
-  CONVIVENCIA: ['dashboard.read', 'cases.read', 'cases.create', 'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read'],
+  CONVIVENCIA: ['dashboard.read', 'cases.read', 'cases.create', 'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'reports.read', 'reports.create', 'reports.update', 'participants.read', 'participants.manage'],
   PSICOLOGO: ['dashboard.read', 'cases.read', 'cases.update', 'cases.timeline.read'],
   TRABAJADOR_SOCIAL: ['dashboard.read', 'cases.read', 'cases.update', 'cases.timeline.read'],
   INSPECTOR_GENERAL: ['dashboard.read', 'cases.read', 'cases.create', 'cases.update', 'cases.timeline.read'],

@@ -9,7 +9,7 @@ Actualizado: 2026-10-22.
 
 ## En curso
 
-- Bloque 3: se incorporó la migración aditiva `20261022230000_reports_participants`, aplicada sólo en `convivencia_test`. Crea `CaseReport`, `Participant` y `CaseParticipant`; faltan servicios, rutas HTTP y pruebas de integración antes de considerar el bloque terminado.
+- Bloque 3: implementados el módulo `reports-participants`, DTOs, rutas protegidas y eventos/auditoría transaccionales. Faltan pruebas HTTP propias del módulo para considerar el bloque terminado.
 
 ## Migraciones
 
@@ -28,4 +28,4 @@ Actualizado: 2026-10-22.
 
 ## Próxima tarea exacta
 
-Implementar el módulo `reports-participants`: DTOs, autorización contextual de expediente, auditoría, eventos, endpoints y pruebas HTTP con PostgreSQL para cerrar el Bloque 3.
+Crear pruebas HTTP con PostgreSQL para `reports-participants`, incluido aislamiento institucional y rollback; después iniciar el módulo de entrevistas.

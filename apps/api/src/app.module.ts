@@ -12,4 +12,5 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { SecurityAuditModule } from './common/security/security-audit.module';
 import { InstitutionsModule } from './modules/institutions/institutions.module';
 import { CasesModule } from './modules/cases/cases.module';
-@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule, InstitutionsModule, CasesModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}
+import { ReportsParticipantsModule } from './modules/reports-participants/reports-participants.module';
+@Module({ imports: [ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]), DatabaseModule, SecurityAuditModule, HealthModule, AuthModule, UsersModule, RolesModule, AuditModule, InstitutionsModule, CasesModule, ReportsParticipantsModule], providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }] }) export class AppModule {}
