@@ -35,13 +35,19 @@ services/*.ts  →  composables/use*.ts (TanStack Query)  →  vista
 - `components/QueryState.vue` resuelve los cuatro estados (cargando, error o integración pendiente, vacío y con datos) para todas las vistas.
 - Los modelos de `types/models.ts` son **de presentación**, no contratos. Al conectar cada recurso, el servicio adaptará la respuesta del backend a esos modelos, o se reemplazarán por tipos publicados en `packages/shared`.
 
-## Autenticación y sesión
+## Autenticación y sesión (integrada con la API real)
 
-- `services/auth.ts` declara `login`, `fetchSession` (`GET /api/auth/me`), `logout`, `requestPasswordReset`, `resetPassword` y `acceptInvitation` según `docs/api/auth-contract.md` y `docs/api/password-recovery-contract.md`. Todas están pendientes de conexión.
-- `useSession` guarda la sesión solo en la caché de TanStack Query (memoria). No se usa `localStorage`, `sessionStorage` ni cookies legibles para la sesión.
-- La guardia del router (`router/index.ts`) deja pasar las rutas públicas; para las privadas consulta la sesión (`ensureSession`) y, sin sesión, redirige a `/login?redirect=…`. `lib/redirect.ts` solo acepta destinos internos.
-- Las rutas con `meta.permission` requieren que la sesión declare ese permiso; si no, se redirige a `/acceso-denegado`. Los permisos se **deniegan por defecto**.
-- Los códigos de recuperación e invitación se pegan en un formulario y viajan en el cuerpo del `POST`, nunca en la URL, como exige el contrato.
+Contratos: [auth-contract](../api/auth-contract.md), [password-recovery-contract](../api/password-recovery-contract.md) y [frontend-integration-guide](../api/frontend-integration-guide.md).
+
+- **Cliente HTTP** (`services/api.ts`): Axios con `withCredentials: true`. La sesión es la cookie HttpOnly `bce_session`; el frontend no lee ni guarda tokens, y no usa `localStorage` ni `sessionStorage`.
+- **CSRF**: las escrituras autenticadas (todo `POST`/`PATCH` salvo `/auth/login`, `forgot-password`, `reset-password` y `accept-invitation`) obtienen el token de `GET /auth/csrf` y lo envían en `X-CSRF-Token`. El token vive solo en memoria del módulo; ante un 403 en una escritura se pide uno nuevo y se reintenta una sola vez.
+- **Ingreso** (`services/auth.ts`): `POST /auth/login` y luego `GET /auth/me`. La segunda llamada confirma que el navegador guardó la cookie y entrega el usuario; si responde 401, se informa que la sesión no quedó establecida (por ejemplo, cookies bloqueadas).
+- **Persistencia tras recargar**: la guardia del router consulta `GET /auth/me` (`ensureSession`) y reutiliza el resultado en memoria (TanStack Query). Un 401 es "sin sesión"; cualquier otro fallo (API caída, 5xx) no se confunde con sesión cerrada y lleva a `/login?motivo=servidor`.
+- **Rutas**: las privadas exigen sesión y redirigen a `/login?redirect=<ruta>`; quien ya tiene sesión que entra a `/login` vuelve al panel. `lib/redirect.ts` solo acepta destinos internos.
+- **Permisos**: `/auth/me` solo entrega roles (informativos). El menú usa `lib/access.ts` como indicio, con la matriz inicial documentada, pero nunca concede acceso: el servidor responde 403 y `ErrorState` lo muestra como "Acceso denegado" sin botón de reintento.
+- **Sesión caducada o revocada**: cualquier llamada autenticada que responda 401 limpia por completo el estado en memoria (`clearSession`) y lleva a `/sesion-expirada`.
+- **Cierre de sesión**: `POST /auth/logout` con CSRF y limpieza total de la caché local; un 401 se considera sesión ya cerrada.
+- **Recuperación**: `forgot-password`, `reset-password` y `accept-invitation` usan los endpoints reales. El código se pega en el formulario y viaja en el cuerpo del `POST`, nunca en la URL; los mensajes distinguen código inválido o vencido (400/401), límite de intentos (429) y fallos del servidor.
 
 ## Modo de previsualización
 
@@ -59,7 +65,7 @@ pnpm --filter @backoffice/web dev:preview   # Vite en modo ui-preview
 ## Integración posterior con Codex
 
 1. Revisar `docs/api/*.md` vigentes y el Swagger local.
-2. En `services/api.ts`, agregar `withCredentials: true` y un interceptor que obtenga `GET /auth/csrf` y envíe `X-CSRF-Token` en `POST`/`PATCH`; ante `401`, limpiar `SESSION_KEY` y redirigir a `/sesion-expirada`.
-3. Reemplazar cada `pendingIntegration()` de `services/auth.ts` y `services/resources.ts` por la llamada real y adaptar la respuesta al modelo de `types/models.ts`.
+2. (Hecho) `services/api.ts` ya envía credenciales, gestiona CSRF y avisa ante 401.
+3. Reemplazar cada `pendingIntegration()` de `services/resources.ts` por la llamada real y adaptar la respuesta al modelo de `types/models.ts`, empezando por usuarios, roles y auditoría.
 4. Mover filtrado, búsqueda y paginación de `ResourceListPage` a parámetros de servidor (`page`, `limit`, `search`, `role`, `active`).
 5. Resolver las observaciones de contrato listadas en `docs/phase-1b-report.md`.

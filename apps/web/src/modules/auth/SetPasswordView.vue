@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import { isAxiosError } from 'axios';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import AppIcon from '@/components/AppIcon.vue';
 import FormField from '@/components/FormField.vue';
-import PendingNotice from '@/components/PendingNotice.vue';
 import { useAcceptInvitation, useResetPassword } from '@/composables/useSession';
+import { describeError } from '@/lib/errors';
 import { minLength, required, validateAll } from '@/lib/validation';
 import AuthTitle from './AuthTitle.vue';
 import PasswordInput from './PasswordInput.vue';
@@ -29,6 +30,18 @@ const mutation = computed(() => (props.mode === 'invite' ? accept : reset));
 const form = reactive({ token: '', password: '', confirm: '' });
 const errors = ref<Partial<Record<keyof typeof form, string>>>({});
 
+/** Código inválido, vencido o ya usado responde 400/401: se explica cómo obtener uno nuevo. */
+const failure = computed(() => {
+  const error = mutation.value.error.value;
+  if (!error) return null;
+  if (isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 401)) {
+    return props.mode === 'invite'
+      ? 'El código no es válido, venció o ya fue usado. Pida a la administración del sistema que reenvíe su invitación.'
+      : 'El código no es válido, venció o ya fue usado. Solicite uno nuevo desde "Recuperar contraseña".';
+  }
+  return describeError(error);
+});
+
 const checks = computed(() => [
   { ok: form.password.length >= MIN, text: `Al menos ${MIN} caracteres` },
   { ok: form.password.length > 0 && form.password === form.confirm, text: 'Ambas contraseñas coinciden' }
@@ -43,7 +56,8 @@ function submit() {
   if (!errors.value.confirm && form.confirm !== form.password) errors.value.confirm = 'Las contraseñas no coinciden.';
   const first = (['token', 'password', 'confirm'] as const).find((k) => errors.value[k]);
   if (first) return document.getElementById(`set-${first}`)?.focus();
-  mutation.value.mutate({ token: form.token.trim(), password: form.password });
+  if (mutation.value.isPending.value) return;
+  mutation.value.mutate({ token: form.token.trim(), password: form.password }, { onSuccess: () => Object.assign(form, { token: '', password: '', confirm: '' }) });
 }
 
 onBeforeUnmount(() => Object.assign(form, { token: '', password: '', confirm: '' }));
@@ -85,7 +99,7 @@ onBeforeUnmount(() => Object.assign(form, { token: '', password: '', confirm: ''
           <AppIcon :name="c.ok ? 'check-circle' : 'circle'" :size="16" />{{ c.text }}<span class="sr-only">{{ c.ok ? '(cumplido)' : '(pendiente)' }}</span>
         </li>
       </ul>
-      <PendingNotice :error="mutation.error.value" :action="mode === 'invite' ? 'la activación' : 'el cambio de contraseña'" />
+      <Message v-if="failure" severity="error" :closable="false" role="alert">{{ failure }}</Message>
       <Button type="submit" :label="copy.submit" class="w-full !border-action !bg-action hover:!border-action-dark hover:!bg-action-dark" :loading="mutation.isPending.value" />
     </form>
   </div>

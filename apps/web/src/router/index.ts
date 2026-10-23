@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, START_LOCATION, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router';
 import { ensureSession } from '@/composables/useSession';
+import { safeRedirect } from '@/lib/redirect';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 
@@ -127,15 +128,33 @@ const router = createRouter({
   routes,
   scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 }
 });
+
 router.beforeEach(async (to, from) => {
   // Previsualización: la aplicación arranca en el ingreso, igual que en producción. Desde allí un enlace
   // exclusivo del modo de desarrollo permite entrar al panel sin sesión. En producción `__UI_PREVIEW__` es el
   // literal false: este bloque se elimina y ninguna ruta privada se abre sin sesión.
   if (__UI_PREVIEW__ && from === START_LOCATION && to.path === '/') return { name: 'login' };
-  if (to.meta.public || __UI_PREVIEW__) return true;
-  const user = await ensureSession();
+  if (__UI_PREVIEW__) return true;
+
+  // Quien ya tiene sesión no vuelve a ver el ingreso. Si la API no responde, se muestra el formulario igualmente.
+  if (to.name === 'login') {
+    try {
+      if (await ensureSession()) return safeRedirect(to.query.redirect);
+    } catch {
+      /* el formulario informará el problema al intentar ingresar */
+    }
+    return true;
+  }
+  if (to.meta.public) return true;
+
+  // Rutas privadas: solo exigen sesión. Los permisos los decide el servidor (403); `meta.permission` solo orienta el menú.
+  let user;
+  try {
+    user = await ensureSession();
+  } catch {
+    return { name: 'login', query: { motivo: 'servidor' } };
+  }
   if (!user) return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } };
-  if (to.meta.permission && !user.permissions.includes(to.meta.permission)) return { name: 'forbidden' };
   return true;
 });
 

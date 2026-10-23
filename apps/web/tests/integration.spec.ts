@@ -4,19 +4,12 @@ import { isUiPreview } from '../src/config/preview';
 import { describeError, IntegrationPendingError, isIntegrationPending } from '../src/lib/errors';
 import { PRIORITIES, statusOf } from '../src/lib/status';
 import { loadDemo } from '../src/preview';
-import * as auth from '../src/services/auth';
 import { ENDPOINTS, fetchResource, submitResource } from '../src/services/resources';
 
 const httpError = (status?: number) =>
   new AxiosError('x', 'ERR', undefined, undefined, status ? { status, statusText: '', data: {}, headers: {}, config: { headers: new AxiosHeaders() } } : undefined);
 
-describe('servicios sin integración', () => {
-  it('nunca simulan un inicio de sesión exitoso', async () => {
-    await expect(auth.login({ email: 'persona@demo.invalid', password: 'x'.repeat(12) })).rejects.toBeInstanceOf(IntegrationPendingError);
-    await expect(auth.fetchSession()).rejects.toBeInstanceOf(IntegrationPendingError);
-    await expect(auth.logout()).rejects.toBeInstanceOf(IntegrationPendingError);
-  });
-
+describe('recursos sin integración', () => {
   it('informan el endpoint previsto según el contrato', async () => {
     await expect(fetchResource('users')).rejects.toMatchObject({ endpoint: 'GET /api/users' });
     await expect(submitResource('users', 'POST', '/abc/revoke-sessions')).rejects.toMatchObject({ endpoint: 'POST /api/users/abc/revoke-sessions' });

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { isAxiosError } from 'axios';
 import Button from 'primevue/button';
 import { describeError, isIntegrationPending } from '@/lib/errors';
 import AppIcon from './AppIcon.vue';
@@ -11,13 +12,15 @@ import AppIcon from './AppIcon.vue';
 const props = withDefaults(defineProps<{ error: unknown; compact?: boolean; subject?: string }>(), { compact: false, subject: 'la información' });
 const emit = defineEmits<{ retry: [] }>();
 const pending = computed(() => isIntegrationPending(props.error));
+/** 403: el servidor negó el permiso; reintentar no cambia el resultado. */
+const forbidden = computed(() => isAxiosError(props.error) && props.error.response?.status === 403);
 const endpoint = computed(() => (isIntegrationPending(props.error) ? props.error.endpoint : null));
 </script>
 
 <template>
   <div :class="['flex flex-col items-center text-center', compact ? 'px-4 py-8' : 'px-6 py-14']" role="status">
-    <span :class="['flex h-11 w-11 items-center justify-center rounded-full', pending ? 'bg-sky-50 text-sky-700' : 'bg-red-50 text-red-700']">
-      <AppIcon :name="pending ? 'clock' : 'alert-circle'" :size="20" />
+    <span :class="['flex h-11 w-11 items-center justify-center rounded-full', pending ? 'bg-sky-50 text-sky-700' : forbidden ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700']">
+      <AppIcon :name="pending ? 'clock' : forbidden ? 'lock' : 'alert-circle'" :size="20" />
     </span>
     <template v-if="pending">
       <p class="mt-4 font-semibold text-slate-900">Integración pendiente</p>
@@ -29,9 +32,9 @@ const endpoint = computed(() => (isIntegrationPending(props.error) ? props.error
       </p>
     </template>
     <template v-else>
-      <p class="mt-4 font-semibold text-slate-900">No se pudo cargar {{ subject }}</p>
+      <p class="mt-4 font-semibold text-slate-900">{{ forbidden ? 'Acceso denegado' : `No se pudo cargar ${subject}` }}</p>
       <p class="mt-1 max-w-md text-sm leading-relaxed text-slate-600">{{ describeError(error) }}</p>
-      <Button class="mt-5" label="Reintentar" severity="secondary" outlined size="small" @click="emit('retry')" />
+      <Button v-if="!forbidden" class="mt-5" label="Reintentar" severity="secondary" outlined size="small" @click="emit('retry')" />
     </template>
   </div>
 </template>

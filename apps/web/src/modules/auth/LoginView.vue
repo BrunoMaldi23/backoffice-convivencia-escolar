@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { isAxiosError } from 'axios';
 import Button from 'primevue/button';
@@ -8,7 +8,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import FormField from '@/components/FormField.vue';
 import IconInput from '@/components/IconInput.vue';
 import { useLogin } from '@/composables/useSession';
-import { describeError, isIntegrationPending } from '@/lib/errors';
+import { describeError } from '@/lib/errors';
 import { safeRedirect } from '@/lib/redirect';
 import { email, required, validateAll } from '@/lib/validation';
 import AuthTitle from './AuthTitle.vue';
@@ -26,12 +26,18 @@ const schema = { email: [required('Ingrese su correo institucional.'), email()],
 /** Credenciales inválidas responden 400/401; el mensaje no revela si el correo existe. */
 const failure = computed(() => {
   const error = login.error.value;
-  if (!error || isIntegrationPending(error)) return null;
+  if (!error) return null;
   if (isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 401)) return 'Correo o contraseña incorrectos. Revise los datos e intente nuevamente.';
   return describeError(error);
 });
 
+/** Avisos al llegar desde la guardia de rutas (por ejemplo, la API no respondió al verificar la sesión). */
+const notice = computed(() => (route.query.motivo === 'servidor' ? 'No se pudo verificar su sesión porque el servidor no responde. Intente nuevamente en unos minutos.' : null));
+
+onMounted(() => document.getElementById('login-email')?.focus());
+
 async function submit() {
+  if (login.isPending.value) return;
   errors.value = validateAll(form, schema);
   if (Object.keys(errors.value).length) {
     await nextTick();
@@ -56,9 +62,7 @@ async function submit() {
 
     <div ref="alertBox" tabindex="-1" class="mt-4 outline-none empty:mt-0" aria-live="assertive">
       <Message v-if="failure" severity="error" :closable="false">{{ failure }}</Message>
-      <Message v-else-if="isIntegrationPending(login.error.value)" severity="info" :closable="false">
-        El inicio de sesión aún no está conectado con el servidor en esta versión. No se enviaron ni guardaron sus datos.
-      </Message>
+      <Message v-else-if="notice" severity="warn" :closable="false">{{ notice }}</Message>
     </div>
 
     <form novalidate class="mt-5 space-y-4" @submit.prevent="submit">

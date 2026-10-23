@@ -36,8 +36,8 @@ export interface DashboardData {
   alerts: { id: Id; text: string; tone: 'warning' | 'danger' | 'info' }[];
 }
 
-/** Sesión vista por el frontend. Se completará con la respuesta real de `GET /api/auth/me`. */
-export interface SessionUser { displayName: string; email: string; roles: string[]; permissions: string[] }
+/** Usuario de la sesión, tal como lo entrega `GET /api/auth/me` (los roles son informativos; el servidor decide los permisos). */
+export interface SessionUser { id: string; displayName: string; email: string; roles: string[] }
 
 /** Qué modelo entrega cada recurso. Los servicios y los datos de previsualización deben respetar este mapa. */
 export interface ResourceMap {

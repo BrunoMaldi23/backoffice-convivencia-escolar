@@ -6,8 +6,8 @@ import Message from 'primevue/message';
 import AppIcon from '@/components/AppIcon.vue';
 import FormField from '@/components/FormField.vue';
 import IconInput from '@/components/IconInput.vue';
-import PendingNotice from '@/components/PendingNotice.vue';
 import { useForgotPassword } from '@/composables/useSession';
+import { describeError } from '@/lib/errors';
 import { email, required, validate } from '@/lib/validation';
 import AuthTitle from './AuthTitle.vue';
 
@@ -16,6 +16,7 @@ const value = ref('');
 const error = ref<string | null>(null);
 
 function submit() {
+  if (request.isPending.value) return;
   error.value = validate(value.value, [required('Ingrese su correo institucional.'), email()]);
   if (error.value) return document.getElementById('forgot-email')?.focus();
   request.mutate(value.value.trim());
@@ -42,7 +43,7 @@ function submit() {
           <IconInput :id="id" v-model="value" icon="mail" type="email" autocomplete="username" placeholder="nombre@colegio.cl" :invalid="invalid" :describedby="describedby" />
         </template>
       </FormField>
-      <PendingNotice :error="request.error.value" action="la solicitud" />
+      <Message v-if="request.error.value" severity="error" :closable="false" role="alert">{{ describeError(request.error.value) }}</Message>
       <Button type="submit" label="Enviar código" class="w-full !border-action !bg-action hover:!border-action-dark hover:!bg-action-dark" :loading="request.isPending.value" />
     </form>
 
