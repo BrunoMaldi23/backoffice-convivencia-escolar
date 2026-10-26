@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import * as argon2 from 'argon2';
 import { PrismaClient } from '@prisma/client';
 import { createInterface } from 'node:readline/promises';
