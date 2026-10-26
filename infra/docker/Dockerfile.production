@@ -1,0 +1,29 @@
+FROM node:22.20.0-bookworm-slim AS build
+WORKDIR /workspace
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN pnpm install --frozen-lockfile
+COPY . .
+# Prisma necesita URLs sintacticamente válidas al generar el cliente; se reemplazan por secretos reales en ejecución.
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build?schema=public
+ENV SHADOW_DATABASE_URL=postgresql://build:build@localhost:5432/build_shadow?schema=public
+RUN pnpm --filter @backoffice/api prisma:generate \
+    && pnpm --filter @backoffice/api build
+
+FROM node:22.20.0-bookworm-slim AS runtime
+WORKDIR /workspace
+ENV NODE_ENV=production
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
+COPY --from=build /root/.cache/node/corepack /root/.cache/node/corepack
+COPY --from=build /workspace /workspace
+EXPOSE 10000
+CMD ["node", "apps/api/dist/main"]

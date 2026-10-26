@@ -17,15 +17,18 @@ const DEFAULT_BODY_LIMIT = '100kb';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
   app.useLogger(new Logger()); app.enableShutdownHooks(); app.setGlobalPrefix('api');
-  // Se conserva trust proxy desactivado: solo debe configurarse con la topología conocida del proxy inverso.
+  const config = app.get(ConfigService);
+  const trustProxyHops = config.getOrThrow<number>('TRUST_PROXY_HOPS');
+  // Local conserva la IP directa; en Render se configura exactamente un proxy mediante la variable de entorno.
+  if (trustProxyHops > 0) (app.getHttpAdapter().getInstance() as { set(name: string, value: number): void }).set('trust proxy', trustProxyHops);
   app.use('/api/cases/:caseId/documents', json({ limit: DOCUMENT_BODY_LIMIT }));
   app.use(json({ limit: DEFAULT_BODY_LIMIT }), urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
   app.use(cookieParser());
   app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' }));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
-  const config = app.get(ConfigService); app.enableCors({ origin: [config.getOrThrow<string>('WEB_ORIGIN')], methods: ['GET', 'POST', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token'] });
+  app.enableCors({ origin: [config.getOrThrow<string>('WEB_ORIGIN')], methods: ['GET', 'POST', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token'] });
   const document = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle('Backoffice Convivencia Escolar').setVersion('1.0.0').addCookieAuth().build());
   if (process.env.NODE_ENV !== 'production') SwaggerModule.setup('api/docs', app, document);
-  await app.listen(config.get<number>('API_PORT') ?? 3000, '0.0.0.0');
+  await app.listen(config.get<number>('PORT') ?? config.getOrThrow<number>('API_PORT'), '0.0.0.0');
 }
 bootstrap();

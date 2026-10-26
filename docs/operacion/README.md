@@ -8,6 +8,7 @@ Esta carpeta es la referencia vigente para preparar, capacitar y aprobar el uso 
 | [Manual de convivencia](manual-convivencia.md) | Encargado/a de convivencia y equipo autorizado | Gestión cotidiana de expedientes y evidencias. |
 | [Matriz UAT](matriz-uat.md) | Equipo de validación | Pruebas de aceptación antes de salida institucional. |
 | [Preparación operativa](preparacion-operativa.md) | Dirección, TI y administración | Decisiones, responsables y controles previos a datos reales. |
+| [Despliegue de staging Vercel/Render](despliegue-staging-vercel-render.md) | TI y desarrollo | Configuración, variables y comprobaciones para el entorno de prueba. |
 
 ## Regla de uso
 
