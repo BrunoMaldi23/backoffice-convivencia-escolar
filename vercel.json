@@ -1,7 +1,10 @@
 {
   "framework": "vite",
   "installCommand": "corepack enable && pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @backoffice/api prisma:generate && pnpm --filter @backoffice/web build",
+  "buildCommand": "pnpm --filter @backoffice/api prisma:generate && pnpm --filter @backoffice/api build && pnpm --filter @backoffice/web build",
   "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/[...path].js": { "includeFiles": "apps/api/dist/**" }
+  },
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
