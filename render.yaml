@@ -3,22 +3,23 @@ services:
     name: backoffice-convivencia-escolar-staging-api
     runtime: docker
     region: oregon
-    plan: 0.5c-512mb
+    plan: free
     dockerfilePath: ./infra/docker/Dockerfile.production
     dockerContext: .
     healthCheckPath: /api/health
-    preDeployCommand: pnpm --filter @backoffice/api prisma:migrate
+    # La aplicación usa conexión pooled; las migraciones requieren la directa de Neon.
+    preDeployCommand: DATABASE_URL=$DATABASE_URL_UNPOOLED pnpm --filter @backoffice/api prisma:migrate
     initialDeployHook: pnpm --filter @backoffice/api roles:seed
     envVars:
       - key: NODE_ENV
         value: production
       - key: TRUST_PROXY_HOPS
         value: "1"
-      - key: PRIVATE_STORAGE_PATH
-        value: /var/data/private
       - key: WEB_ORIGIN
         sync: false
       - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
         sync: false
       - key: SHADOW_DATABASE_URL
         sync: false
@@ -34,7 +35,3 @@ services:
         sync: false
       - key: MAIL_PASSWORD
         sync: false
-    disk:
-      name: private-documents
-      mountPath: /var/data
-      sizeGB: 1

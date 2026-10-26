@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.14.0",
-  "engines": { "node": ">=22.0.0 <23", "pnpm": ">=9.14.0 <10" },
+  "engines": {
+    "node": ">=22.0.0 <23",
+    "pnpm": ">=9.14.0 <10"
+  },
   "scripts": {
     "dev": "pnpm --parallel --stream --filter @backoffice/web --filter @backoffice/api dev",
     "build": "pnpm --filter @backoffice/shared build && pnpm --filter @backoffice/web build && pnpm --filter @backoffice/api build",
@@ -11,5 +14,9 @@
     "typecheck": "pnpm --filter @backoffice/shared typecheck && pnpm --filter @backoffice/web typecheck && pnpm --filter @backoffice/api typecheck",
     "test": "pnpm --filter @backoffice/web test && pnpm --filter @backoffice/api test",
     "db:migrate": "pnpm --filter @backoffice/api prisma:migrate"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.4",
+    "@neon/env": "^1.6.5"
   }
 }

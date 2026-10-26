@@ -4,7 +4,7 @@ Use Axios con cookies; no use `localStorage` para sesión.
 
 ```ts
 import axios from 'axios';
-export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api', withCredentials: true });
+export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:3000/api'), withCredentials: true });
 export async function csrf() { return (await api.get<{token:string}>('/auth/csrf')).data.token; }
 export async function write(url: string, data?: unknown) { return api.post(url, data, { headers: { 'X-CSRF-Token': (await csrf()) } }); }
 ```

@@ -26,3 +26,5 @@ Thumbs.db
 # Copias locales de la base de datos: contienen datos reales, nunca se versionan.
 .local-backups/
 *.dump
+.vercel
+.neon

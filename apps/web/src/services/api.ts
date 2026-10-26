@@ -6,7 +6,8 @@ import axios, { type InternalAxiosRequestConfig } from 'axios';
  * `X-CSRF-Token` que entrega `GET /auth/csrf`.
  */
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api',
+  // En producción Vercel reenvía /api al backend para conservar las cookies SameSite=Strict.
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:3000/api'),
   withCredentials: true,
   timeout: 15_000
 });

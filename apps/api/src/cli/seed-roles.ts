@@ -15,19 +15,36 @@ const matrix: Record<string, string[]> = {
 
 async function main() {
   await db.$transaction(async (tx) => {
-    const byCode = new Map<string, string>();
-    for (const code of permissions) {
-      const permission = await tx.permission.upsert({ where: { code }, update: {}, create: { code, description: code } });
-      byCode.set(code, permission.id);
-    }
-    for (const [name, codes] of Object.entries(matrix)) {
-      const role = await tx.role.upsert({ where: { name }, update: {}, create: { name, description: name } });
-      for (const code of codes) await tx.rolePermission.upsert({ where: { roleId_permissionId: { roleId: role.id, permissionId: byCode.get(code)! } }, update: {}, create: { roleId: role.id, permissionId: byCode.get(code)! } });
-    }
+    await tx.permission.createMany({
+      data: permissions.map((code) => ({ code, description: code })),
+      skipDuplicates: true,
+    });
+    await tx.role.createMany({
+      data: Object.keys(matrix).map((name) => ({ name, description: name })),
+      skipDuplicates: true,
+    });
+
+    const [storedPermissions, storedRoles] = await Promise.all([
+      tx.permission.findMany({ select: { id: true, code: true } }),
+      tx.role.findMany({ select: { id: true, name: true } }),
+    ]);
+    const permissionByCode = new Map(storedPermissions.map((permission) => [permission.code, permission.id]));
+    const roleByName = new Map(storedRoles.map((role) => [role.name, role.id]));
+    const assignments = Object.entries(matrix).flatMap(([name, codes]) =>
+      codes.map((code) => ({
+        roleId: roleByName.get(name)!,
+        permissionId: permissionByCode.get(code)!,
+      })),
+    );
+    await tx.rolePermission.createMany({ data: assignments, skipDuplicates: true });
     await tx.systemControl.upsert({ where: { key: 'rbac_seed_v2' }, update: { value: 'superseded-by-v3' }, create: { key: 'rbac_seed_v2', value: 'superseded-by-v3' } });
     await tx.systemControl.upsert({ where: { key: 'rbac_seed_v3' }, update: { value: 'superseded-by-v4' }, create: { key: 'rbac_seed_v3', value: 'superseded-by-v4' } });
     await tx.systemControl.upsert({ where: { key: 'rbac_seed_v4' }, update: { value: 'applied' }, create: { key: 'rbac_seed_v4', value: 'applied' } });
-  });
+  }, { maxWait: 10_000, timeout: 60_000 });
   process.stdout.write('Roles y permisos inicializados o ya existentes.\n');
 }
-main().catch(() => { process.stderr.write('No se pudo inicializar RBAC.\n'); process.exitCode = 1; }).finally(async () => db.$disconnect());
+main().catch((error: unknown) => {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'unknown';
+  process.stderr.write(`No se pudo inicializar RBAC (código: ${code}).\n`);
+  process.exitCode = 1;
+}).finally(async () => db.$disconnect());
