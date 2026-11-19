@@ -19,20 +19,20 @@ export const updateCourse = async (id: Uuid, input: { expectedVersion: number; n
 // ── Estudiantes ──
 export const listStudents = async (query: StudentQuery): Promise<Page<Student>> => (await api.get<Page<Student>>('/students', { params: params({ page: 1, limit: 25, ...query }) })).data;
 export const getStudent = async (id: Uuid): Promise<StudentDetail> => (await api.get<StudentDetail>(`/students/${id}`)).data;
-export interface StudentInput { rut: string; firstNames: string; lastNames: string; birthDate?: string; courseId?: Uuid }
+export interface StudentInput { rut: string; firstNames: string; lastNames: string; sex?: string; birthDate?: string; email?: string; courseId?: Uuid }
 export const createStudent = async (input: StudentInput & { establishmentId: Uuid }): Promise<Student> => (await api.post<Student>('/students', input)).data;
-export const updateStudent = async (id: Uuid, input: { expectedVersion: number; rut?: string; firstNames?: string; lastNames?: string; birthDate?: string | null; courseId?: Uuid | null; isActive?: boolean }): Promise<Student> => (await api.patch<Student>(`/students/${id}`, input)).data;
+export const updateStudent = async (id: Uuid, input: { expectedVersion: number; rut?: string; firstNames?: string; lastNames?: string; sex?: string | null; birthDate?: string | null; email?: string | null; courseId?: Uuid | null; isActive?: boolean }): Promise<Student> => (await api.patch<Student>(`/students/${id}`, input)).data;
 export const listStudentCases = async (id: Uuid): Promise<StudentCaseRef[]> => (await api.get<StudentCaseRef[]>(`/students/${id}/cases`)).data;
 export const linkStudentGuardian = async (studentId: Uuid, input: { guardianId: Uuid; relationship: string; isPrimary: boolean }): Promise<unknown> => (await api.post(`/students/${studentId}/guardians`, input)).data;
 export const unlinkStudentGuardian = async (studentId: Uuid, guardianId: Uuid): Promise<void> => { await api.post(`/students/${studentId}/guardians/${guardianId}/unlink`, {}); };
-export const importStudents = async (input: { establishmentId: Uuid; academicYear: number; rows: ImportStudentRow[] }): Promise<ImportStudentsResult> => (await api.post<ImportStudentsResult>('/students/import', input)).data;
+export const importStudents = async (input: { academicYear: number; rows: ImportStudentRow[] }): Promise<ImportStudentsResult> => (await api.post<ImportStudentsResult>('/students/import', input)).data;
 
 // ── Apoderados ──
 export const listGuardians = async (query: GuardianQuery): Promise<Page<Guardian>> => (await api.get<Page<Guardian>>('/guardians', { params: params({ page: 1, limit: 25, ...query }) })).data;
 export const getGuardian = async (id: Uuid): Promise<GuardianDetail> => (await api.get<GuardianDetail>(`/guardians/${id}`)).data;
-export interface GuardianInput { rut?: string; firstNames: string; lastNames: string; email?: string; phone?: string }
+export interface GuardianInput { rut?: string; firstNames: string; lastNames: string; birthDate?: string; address?: string; email?: string; phone?: string }
 export const createGuardian = async (input: GuardianInput & { establishmentId: Uuid }): Promise<Guardian> => (await api.post<Guardian>('/guardians', input)).data;
-export const updateGuardian = async (id: Uuid, input: { expectedVersion: number; rut?: string | null; firstNames?: string; lastNames?: string; email?: string | null; phone?: string | null; isActive?: boolean }): Promise<Guardian> => (await api.patch<Guardian>(`/guardians/${id}`, input)).data;
+export const updateGuardian = async (id: Uuid, input: { expectedVersion: number; rut?: string | null; firstNames?: string; lastNames?: string; birthDate?: string | null; address?: string | null; email?: string | null; phone?: string | null; isActive?: boolean }): Promise<Guardian> => (await api.patch<Guardian>(`/guardians/${id}`, input)).data;
 
 // ── Funcionarios ──
 export const listStaff = async (query: PeopleQuery): Promise<Page<StaffMember>> => (await api.get<Page<StaffMember>>('/staff', { params: params({ page: 1, limit: 25, ...query }) })).data;

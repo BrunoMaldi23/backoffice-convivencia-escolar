@@ -5,8 +5,8 @@ import * as ops from '@/services/caseOperations';
 import type { CaseAccessLevel } from '@/types/api';
 import { useApiMutation } from './useApiMutation';
 
-export const useUserList = (query: MaybeRefOrGetter<admin.UserListQuery>) =>
-  useQuery({ queryKey: computed(() => ['users', 'list', toValue(query)]), queryFn: () => admin.listUsers(toValue(query)), placeholderData: keepPreviousData });
+export const useUserList = (query: MaybeRefOrGetter<admin.UserListQuery>, enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({ queryKey: computed(() => ['users', 'list', toValue(query)]), queryFn: ({ signal }) => admin.listUsers(toValue(query), { signal }), enabled, placeholderData: keepPreviousData });
 export const useUser = (id: MaybeRefOrGetter<string>) => useQuery({ queryKey: computed(() => ['users', 'detail', toValue(id)]), queryFn: () => admin.getUser(toValue(id)) });
 
 const USERS: string[][] = [['users']];
@@ -17,11 +17,11 @@ export const useAssignUserRoles = () => useApiMutation((input: { id: string; rol
 export const useRevokeSessions = () => useApiMutation((id: string) => admin.revokeUserSessions(id), () => [['audit']]);
 export const useResendInvitation = () => useApiMutation((id: string) => admin.resendInvitation(id), () => [['audit']]);
 
-export const useRoles = (enabled: MaybeRefOrGetter<boolean> = true) => useQuery({ queryKey: ['roles'], queryFn: admin.listRoles, enabled, staleTime: 5 * 60_000 });
-export const usePermissions = (enabled: MaybeRefOrGetter<boolean> = true) => useQuery({ queryKey: ['permissions'], queryFn: admin.listPermissions, enabled, staleTime: 5 * 60_000 });
+export const useRoles = (enabled: MaybeRefOrGetter<boolean> = true) => useQuery({ queryKey: ['roles'], queryFn: ({ signal }) => admin.listRoles({ signal }), enabled, staleTime: 5 * 60_000 });
+export const usePermissions = (enabled: MaybeRefOrGetter<boolean> = true) => useQuery({ queryKey: ['permissions'], queryFn: ({ signal }) => admin.listPermissions({ signal }), enabled, staleTime: 5 * 60_000 });
 
 export const useAudit = (query: MaybeRefOrGetter<admin.AuditQuery>) =>
-  useQuery({ queryKey: computed(() => ['audit', toValue(query)]), queryFn: () => admin.listAudit(toValue(query)), placeholderData: keepPreviousData });
+  useQuery({ queryKey: computed(() => ['audit', toValue(query)]), queryFn: ({ signal }) => admin.listAudit(toValue(query), { signal }), placeholderData: keepPreviousData });
 
 const ESTABLISHMENTS: string[][] = [['establishments']];
 export const useEstablishments = (enabled: MaybeRefOrGetter<boolean> = true) => useQuery({ queryKey: ['establishments'], queryFn: admin.listEstablishments, enabled, staleTime: 10 * 60_000, retry: false });
@@ -36,5 +36,6 @@ export const useRevokeCaseAccess = () => useApiMutation((input: { caseId: string
 // Protocolos (catálogo institucional)
 export const useProtocols = (establishmentId: MaybeRefOrGetter<string | null>, enabled: MaybeRefOrGetter<boolean> = true) =>
   useQuery({ queryKey: computed(() => ['protocols', toValue(establishmentId)]), queryFn: () => ops.listProtocols(toValue(establishmentId)!), enabled: computed(() => Boolean(toValue(establishmentId)) && toValue(enabled)) });
-export const useCreateProtocol = () => useApiMutation((input: { establishmentId: string; code: string; name: string; title: string; content: unknown }) => ops.createProtocol(input), () => [['protocols']]);
+export const useImportRice2026Protocols = () => useApiMutation((establishmentId: string) => ops.importRice2026Protocols(establishmentId), () => [['protocols']]);
+export const useCreateProtocol = () => useApiMutation((input: { establishmentId: string; code: string; name: string; categoryCodes: string[]; title: string; content: unknown }) => ops.createProtocol(input), () => [['protocols']]);
 export const usePublishProtocolVersion = () => useApiMutation((input: { versionId: string; establishmentId: string }) => ops.publishProtocolVersion(input.versionId, input.establishmentId), () => [['protocols']]);

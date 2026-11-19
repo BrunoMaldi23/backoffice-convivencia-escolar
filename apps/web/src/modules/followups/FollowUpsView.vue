@@ -5,11 +5,13 @@ import PageHeader from '@/components/PageHeader.vue';
 import QueryState from '@/components/QueryState.vue';
 import ScopeNotice from '@/components/ScopeNotice.vue';
 import SearchToolbar from '@/components/SearchToolbar.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
 import type { ColumnDef, FilterDef } from '@/components/types';
 import { useDirectory } from '@/composables/useDirectory';
 import { useScopedFollowUps, type ScopedRow } from '@/composables/useScoped';
 import { formatFolio } from '@/lib/catalogs';
 import { formatDate, formatDateTime, isOverdue } from '@/lib/format';
+import { isOverdueFollowUp, isPendingFollowUp } from '@/lib/metrics';
 import type { CaseFollowUp } from '@/types/api';
 
 /** Seguimientos registrados en los expedientes revisados, con su próxima acción y plazo. Se registran dentro de cada expediente. */
@@ -17,18 +19,18 @@ const { nameOf } = useDirectory();
 const query = useScopedFollowUps({ includeClosed: true });
 const search = ref('');
 const values = ref<Record<string, string | null>>({ next: null });
-const filters: FilterDef[] = [{ field: 'next', label: 'Próxima acción', options: [{ value: 'overdue', label: 'Vencida' }, { value: 'pending', label: 'Con plazo vigente' }, { value: 'none', label: 'Sin próxima acción' }] }];
+const filters: FilterDef[] = [{ field: 'next', label: 'Estado de la acción', options: [{ value: 'overdue', label: 'Vencida' }, { value: 'pending', label: 'Pendiente' }, { value: 'none', label: 'Sin próxima acción' }] }];
 const columns: ColumnDef[] = [
   { field: 'occurredAt', header: 'Fecha y hora', sortable: true }, { field: 'case', header: 'Expediente' }, { field: 'note', header: 'Seguimiento', minScreen: 'md' },
-  { field: 'createdByUserId', header: 'Registró', minScreen: 'xl' }, { field: 'nextAction', header: 'Próxima acción', minScreen: 'lg' }
+  { field: 'createdByUserId', header: 'Registró', minScreen: 'xl' }, { field: 'nextAction', header: 'Próxima acción', minScreen: 'lg' }, { field: 'nextStatus', header: 'Estado', minScreen: 'md' }
 ];
-type Row = ScopedRow<CaseFollowUp> & { id: string; occurredAt: string; note: string; createdByUserId: string; nextAction: string | null };
+type Row = ScopedRow<CaseFollowUp> & { id: string; occurredAt: string; note: string; createdByUserId: string; nextAction: string | null; nextStatus: 'NONE' | 'PENDING' | 'OVERDUE' };
 const normalize = (value: string) => value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const rows = computed<Row[]>(() => (query.data.value?.rows ?? []).map((row) => ({ ...row, id: row.item.id, occurredAt: row.item.occurredAt, note: row.item.note, createdByUserId: row.item.createdByUserId, nextAction: row.item.nextAction }))
+const actionStatus = (item: CaseFollowUp): Row['nextStatus'] => !isPendingFollowUp(item) ? 'NONE' : isOverdueFollowUp(item) ? 'OVERDUE' : 'PENDING';
+const rows = computed<Row[]>(() => (query.data.value?.rows ?? []).map((row) => ({ ...row, id: row.item.id, occurredAt: row.item.occurredAt, note: row.item.note, createdByUserId: row.item.createdByUserId, nextAction: row.item.nextAction, nextStatus: actionStatus(row.item) }))
   .filter((row) => {
     const next = values.value.next;
-    const due = row.item.nextActionDueAt;
-    return (!next || (next === 'overdue' ? Boolean(due) && isOverdue(due) : next === 'pending' ? Boolean(due) && !isOverdue(due) : !row.nextAction)) &&
+    return (!next || (next === 'overdue' ? row.nextStatus === 'OVERDUE' : next === 'pending' ? row.nextStatus === 'PENDING' : row.nextStatus === 'NONE')) &&
       (!search.value.trim() || normalize(`${row.note} ${formatFolio(row.case.folio)} ${row.case.title}`).includes(normalize(search.value.trim())));
   }).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)));
 const rowTo = (row: Row) => ({ name: 'cases-detail', params: { id: row.case.id }, query: { tab: 'seguimientos' } });
@@ -50,6 +52,11 @@ const rowTo = (row: Row) => ({ name: 'cases-detail', params: { id: row.case.id }
             <template #cell-nextAction="{ row }">
               <span v-if="row.nextAction" class="block max-w-xs truncate">{{ row.nextAction }}<span v-if="row.item.nextActionDueAt" :class="['ml-1 text-xs tabular-nums', isOverdue(row.item.nextActionDueAt) ? 'font-semibold text-red-800' : 'text-slate-500']">· {{ formatDate(row.item.nextActionDueAt) }}</span></span>
               <span v-else class="text-slate-500">—</span>
+            </template>
+            <template #cell-nextStatus="{ row }">
+              <StatusBadge v-if="row.nextStatus === 'OVERDUE'" status="VENCIDO" />
+              <StatusBadge v-else-if="row.nextStatus === 'PENDING'" status="PENDIENTE" />
+              <StatusBadge v-else tone="neutral" label="Sin acción" />
             </template>
             <template #empty><div class="px-6 py-10 text-center text-sm text-slate-600">Sin coincidencias. Ajuste la búsqueda o los filtros.</div></template>
           </AppTable>

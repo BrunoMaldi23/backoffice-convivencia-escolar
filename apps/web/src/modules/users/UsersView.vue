@@ -81,7 +81,7 @@ async function submit() {
           <AppTable :rows="data" :columns="columns" label="Usuarios" :total="query.data.value?.total" :page="page" :limit="15" :loading="query.isFetching.value" :row-to="rowTo" :detail-label="(u) => `Ver ${u.displayName}`" @page="page = $event">
             <template #cell-displayName="{ row }"><span class="font-medium">{{ row.displayName }}</span></template>
             <template #cell-roles="{ row }"><span class="flex flex-wrap gap-1"><span v-for="r in row.roles" :key="r" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">{{ roleLabel(r) }}</span></span></template>
-            <template #cell-isActive="{ row }"><StatusBadge :status="row.isActive ? 'ACTIVO' : 'INACTIVO'" /></template>
+            <template #cell-isActive="{ row }"><StatusBadge :status="row.isActive ? 'ACTIVO' : row.invitationPending ? 'PENDIENTE' : 'INACTIVO'" /></template>
             <template #cell-createdAt="{ row }"><span class="whitespace-nowrap tabular-nums">{{ formatDate(row.createdAt) }}</span></template>
             <template #empty><div class="px-6 py-10 text-center text-sm text-slate-600">Ningún usuario coincide con la búsqueda o los filtros.</div></template>
           </AppTable>
@@ -94,7 +94,7 @@ async function submit() {
       <FormField id="nu-name" label="Nombre completo" required :error="errors.displayName"><template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.displayName" maxlength="120" :invalid="invalid" :aria-describedby="describedby" autocomplete="off" class="w-full" /></template></FormField>
       <FormField id="nu-email" label="Correo institucional" required :error="errors.email"><template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.email" type="email" maxlength="254" :invalid="invalid" :aria-describedby="describedby" autocomplete="off" class="w-full" /></template></FormField>
       <FormField id="nu-roles" label="Roles" required help="El rol de administración del sistema no se concede al crear cuentas." :error="errors.roles">
-        <template #default="{ id, invalid, describedby }"><MultiSelect v-model="form.roles" :input-id="id" :options="creatableRoleOptions" option-label="label" option-value="value" display="chip" :invalid="invalid" :aria-describedby="describedby" placeholder="Seleccione uno o más roles" class="w-full" /></template>
+        <template #default="{ id, invalid, describedby }"><MultiSelect v-model="form.roles" :input-id="id" :options="creatableRoleOptions" option-label="label" option-value="value" display="chip" :show-toggle-all="false" :invalid="invalid" :aria-describedby="describedby" placeholder="Seleccione uno o más roles" class="w-full" /></template>
       </FormField>
       <FormField id="nu-establishment" label="Establecimiento" required help="La persona podrá acceder solo a los datos de este establecimiento." :error="errors.establishmentId">
         <template #default="{ id, invalid, describedby }"><Select v-model="form.establishmentId" :input-id="id" :options="establishments.data.value?.filter((item) => item.isActive) ?? []" option-label="name" option-value="id" :loading="establishments.isPending.value" :invalid="invalid" :aria-describedby="describedby" placeholder="Seleccione el establecimiento" class="w-full" /></template>

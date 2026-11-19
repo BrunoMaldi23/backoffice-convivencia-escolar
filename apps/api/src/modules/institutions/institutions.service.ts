@@ -58,7 +58,7 @@ export class InstitutionsService {
     };
   }
 
-  async requireCaseAccess(userId: string, caseId: string, write = false, tx: Prisma.TransactionClient = this.db) {
+  async requireCaseAccess(userId: string, caseId: string, write = false, tx: Prisma.TransactionClient | DatabaseService = this.db) {
     const record = await tx.case.findFirst({ where: { id: caseId, ...this.caseAccessWhere(userId, write) } });
     if (!record) throw new NotFoundException('Expediente no disponible');
     return record;

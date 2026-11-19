@@ -2,7 +2,6 @@ import { computed } from 'vue';
 import { isAxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { isUiPreview } from '@/config/preview';
-import { roleHintAllows } from '@/lib/access';
 import { queryClient } from '@/lib/queryClient';
 import * as auth from '@/services/auth';
 import type { SessionUser } from '@/types/api';
@@ -36,8 +35,8 @@ export function clearSession(client = queryClient): void {
 export function useSession() {
   const query = useQuery({ queryKey: SESSION_KEY, queryFn: readSession, staleTime: 5 * 60_000, enabled: !isUiPreview });
   const user = computed(() => query.data.value ?? null);
-  /** Indicio de interfaz según roles (ver `lib/access.ts`); el servidor responde 403 si corresponde. */
-  const can = (permission?: string) => roleHintAllows(user.value?.roles ?? [], permission);
+  /** La interfaz refleja los permisos efectivos de la sesión; el servidor sigue siendo la autoridad. */
+  const can = (permission?: string) => !permission || Boolean(user.value?.permissions.includes(permission));
   return { query, user, can, isPreview: isUiPreview };
 }
 

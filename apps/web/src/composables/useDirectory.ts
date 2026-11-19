@@ -1,4 +1,4 @@
-import { computed } from 'vue';
+import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { listMembers, listUsers } from '@/services/admin';
 import { useEstablishmentContext } from './useEstablishmentContext';
@@ -12,12 +12,12 @@ import { useSession } from './useSession';
  * pertenecen al establecimiento. Si ninguna fuente responde, se muestra "Usted" para la propia cuenta y un identificador corto
  * para el resto, y la asignación se hace pegando el identificador.
  */
-export function useDirectory() {
+export function useDirectory(config: { includeAllUsers?: MaybeRefOrGetter<boolean> } = {}) {
   const { user, can } = useSession();
   const { currentId } = useEstablishmentContext();
-  const members = useQuery({ queryKey: computed(() => ['establishments', currentId.value, 'members']), queryFn: () => listMembers(currentId.value!), enabled: computed(() => Boolean(currentId.value)), staleTime: 5 * 60_000, retry: false });
-  const usersEnabled = computed(() => can('users.read'));
-  const users = useQuery({ queryKey: ['users', 'directory'], queryFn: () => listUsers({ page: 1, limit: 100 }), enabled: usersEnabled, staleTime: 5 * 60_000, retry: false });
+  const members = useQuery({ queryKey: computed(() => ['establishments', currentId.value, 'members']), queryFn: ({ signal }) => listMembers(currentId.value!, { signal }), enabled: computed(() => Boolean(currentId.value)), staleTime: 5 * 60_000, retry: false });
+  const usersEnabled = computed(() => can('users.read') && (Boolean(toValue(config.includeAllUsers)) || members.isError.value));
+  const users = useQuery({ queryKey: ['users', 'directory'], queryFn: ({ signal }) => listUsers({ page: 1, limit: 100 }, { signal }), enabled: usersEnabled, staleTime: 5 * 60_000, retry: false });
 
   const names = computed(() => {
     const map = new Map<string, string>();

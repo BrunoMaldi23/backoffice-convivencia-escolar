@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { casesByMonth, collectDeadlines, computeCaseMetrics, isOverdueMeasure, isOverdueTask } from '../src/lib/metrics';
+import { casesByMonth, collectDeadlines, computeCaseMetrics, isOverdueFollowUp, isOverdueMeasure, isOverdueTask, isPendingFollowUp } from '../src/lib/metrics';
 import { transitionLabel, transitionNeedsReason, TRANSITIONS } from '../src/lib/catalogs';
-import type { CaseMeasure, CaseRecord, CaseTask } from '../src/types/api';
+import type { CaseMeasure, CaseRecord, CaseSummons, CaseTask } from '../src/types/api';
 
 const NOW = new Date('2026-10-15T12:00:00.000Z');
 const day = (offset: number) => new Date(NOW.getTime() + offset * 86_400_000).toISOString();
@@ -20,20 +20,25 @@ describe('indicadores de expedientes', () => {
   ];
   const m = computeCaseMetrics(cases, NOW);
 
-  it('cuenta activos, cerrados y por estado sin inventar valores', () => {
+  it('cuenta los casos en gestión, cerrados y por estado sin inventar valores', () => {
     expect(m.total).toBe(4);
-    expect(m.active).toHaveLength(3);
+    expect(m.inManagement).toHaveLength(3);
     expect(m.closed).toBe(1);
     expect(m.byStatus).toMatchObject({ ABIERTO: 1, EN_EVALUACION: 0, EN_PROCESO: 1, PAUSADO: 1, RESUELTO: 0, CERRADO: 1 });
-  });
-
-  it('cuenta como nuevos solo los recibidos en los últimos 30 días', () => {
-    expect(m.recentlyReceived).toBe(1);
   });
 
   it('un caso cerrado no cuenta como crítico ni como acción vencida', () => {
     expect(m.critical.map((c) => c.id)).toEqual([cases[0]!.id]);
     expect(m.overdueActions.map((c) => c.id)).toEqual([cases[1]!.id]);
+  });
+
+  it('separa los resueltos pendientes de cierre del trabajo que sigue en gestión', () => {
+    const resolved = make({ status: 'RESUELTO', priority: 'CRITICA', nextActionDueAt: day(-1) });
+    const result = computeCaseMetrics([...cases, resolved], NOW);
+    expect(result.inManagement.map((c) => c.id)).not.toContain(resolved.id);
+    expect(result.resolvedPendingClosure.map((c) => c.id)).toContain(resolved.id);
+    expect(result.critical.map((c) => c.id)).not.toContain(resolved.id);
+    expect(result.overdueActions.map((c) => c.id)).not.toContain(resolved.id);
   });
 
   it('ordena los casos que requieren atención por prioridad y excluye los de baja prioridad al día', () => {
@@ -51,6 +56,7 @@ describe('indicadores de expedientes', () => {
 describe('plazos', () => {
   const task = (over: Partial<CaseTask>): CaseTask => ({ id: 't', caseId: 'c1', createdByUserId: 'u', assignedToUserId: null, title: 'Tarea', dueAt: null, status: 'PENDIENTE', version: 1, completedAt: null, createdAt: day(-9), updatedAt: day(-9), ...over });
   const measure = (over: Partial<CaseMeasure>): CaseMeasure => ({ id: 'm', caseId: 'c1', createdByUserId: 'u', title: 'Medida', description: null, dueAt: null, status: 'PENDIENTE', version: 1, completedAt: null, createdAt: day(-9), updatedAt: day(-9), responsibles: [], ...over });
+  const summons = (over: Partial<CaseSummons>): CaseSummons => ({ id: 's', caseId: 'c1', participantId: null, recipientLabel: 'Apoderado/a', scheduledAt: day(1), location: 'Sala', reason: 'Conversar', status: 'PROGRAMADA', outcomeNote: null, emailSentAt: null, createdByUserId: 'u', version: 1, createdAt: day(-1), updatedAt: day(-1), ...over });
 
   it('solo las tareas y medidas pendientes pueden estar vencidas', () => {
     expect(isOverdueTask(task({ dueAt: day(-1) }), NOW)).toBe(true);
@@ -60,6 +66,13 @@ describe('plazos', () => {
     expect(isOverdueMeasure(measure({ dueAt: day(2) }), NOW)).toBe(false);
   });
 
+  it('deriva el estado de una próxima acción de seguimiento sin inventar un estado persistente', () => {
+    const followUp = { id: 'f', caseId: 'c1', createdByUserId: 'u', occurredAt: day(-1), note: 'n', nextAction: 'Llamar', nextActionDueAt: day(-1), version: 1, createdAt: day(-1) };
+    expect(isPendingFollowUp(followUp)).toBe(true);
+    expect(isOverdueFollowUp(followUp, NOW)).toBe(true);
+    expect(isPendingFollowUp({ ...followUp, nextAction: null, nextActionDueAt: null })).toBe(false);
+  });
+
   it('reúne los plazos de todas las fuentes reales y los ordena por fecha', () => {
     const open = make({ nextAction: 'Revisar', nextActionDueAt: day(4) });
     const closed = make({ status: 'CERRADO', nextActionDueAt: day(1) });
@@ -67,9 +80,10 @@ describe('plazos', () => {
       cases: [open, closed],
       tasks: [{ caseId: open.id, item: task({ id: 't1', dueAt: day(2) }) }, { caseId: open.id, item: task({ id: 't2', dueAt: day(1), status: 'COMPLETADA' }) }],
       measures: [{ caseId: open.id, item: measure({ id: 'm1', dueAt: day(-2) }) }],
-      followUps: [{ caseId: open.id, item: { id: 'f1', caseId: open.id, createdByUserId: 'u', occurredAt: day(-1), note: 'n', nextAction: 'Llamar', nextActionDueAt: day(3), version: 1, createdAt: day(-1) } }]
+      followUps: [{ caseId: open.id, item: { id: 'f1', caseId: open.id, createdByUserId: 'u', occurredAt: day(-1), note: 'n', nextAction: 'Llamar', nextActionDueAt: day(3), version: 1, createdAt: day(-1) } }],
+      summons: [{ caseId: open.id, item: summons({ id: 's1', caseId: open.id, scheduledAt: day(1) }) }, { caseId: open.id, item: summons({ id: 's2', caseId: open.id, status: 'REALIZADA', scheduledAt: day(1) }) }]
     }, NOW);
-    expect(list.map((d) => d.id)).toEqual(['measure-m1', 'task-t1', 'follow-up-f1', `case-${open.id}`]);
+    expect(list.map((d) => d.id)).toEqual(['measure-m1', 'summons-s1', 'task-t1', 'follow-up-f1', `case-${open.id}`]);
     expect(list[0]!.overdue).toBe(true);
     expect(list.some((d) => d.id === `case-${closed.id}`)).toBe(false);
   });
@@ -93,6 +107,6 @@ describe('máquina de estados en la interfaz', () => {
   it('nombra la acción según el cambio', () => {
     expect(transitionLabel('RESUELTO', 'CERRADO')).toBe('Cerrar caso');
     expect(transitionLabel('CERRADO', 'EN_EVALUACION')).toBe('Reabrir caso');
-    expect(transitionLabel('EN_PROCESO', 'PAUSADO')).toBe('Pausar');
+    expect(transitionLabel('EN_PROCESO', 'PAUSADO')).toBe('Pausar expediente');
   });
 });

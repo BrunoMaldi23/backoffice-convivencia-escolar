@@ -32,4 +32,13 @@ export class MailService {
     try { await transport.sendMail({ from: this.config.getOrThrow<string>('MAIL_FROM'), to, subject, text }); }
     catch { throw new ServiceUnavailableException('No se pudo enviar el correo. Intente nuevamente.'); }
   }
+
+  async sendSummons(to: string, input: { recipientLabel: string; scheduledAt: Date; location: string; attachment: Buffer; filename: string }) {
+    const when = new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Santiago' }).format(input.scheduledAt);
+    const text = `Estimado/a ${input.recipientLabel}:\n\nSe adjunta la citación a entrevista.\n\nFecha y hora: ${when}\nLugar: ${input.location}\n\nSi no puede asistir, comuníquese oportunamente con el establecimiento.\n\nEquipo de Convivencia Escolar`;
+    const transport = nodemailer.createTransport(smtpOptions((key) => this.config.get<string | number | boolean>(key)));
+    try {
+      await transport.sendMail({ from: this.config.getOrThrow<string>('MAIL_FROM'), to, subject: 'Citación a entrevista', text, attachments: [{ filename: input.filename, content: input.attachment, contentType: 'application/pdf' }] });
+    } catch { throw new ServiceUnavailableException('No se pudo enviar la citación por correo. Verifique la configuración e intente nuevamente.'); }
+  }
 }

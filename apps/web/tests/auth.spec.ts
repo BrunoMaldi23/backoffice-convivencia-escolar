@@ -1,16 +1,17 @@
 import { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearSession, ensureSession, SESSION_KEY } from '../src/composables/useSession';
-import { roleHintAllows } from '../src/lib/access';
-import { SessionNotEstablishedError } from '../src/lib/errors';
 import { queryClient } from '../src/lib/queryClient';
 import { api, resetCsrf, setUnauthorizedHandler } from '../src/services/api';
 import * as auth from '../src/services/auth';
 
+const { setSupabasePassword } = vi.hoisted(() => ({ setSupabasePassword: vi.fn(async () => undefined) }));
+vi.mock('../src/services/supabase', () => ({ setSupabasePassword }));
+
 interface Call { method: string; url: string; csrf: string | undefined; body: unknown }
 type Reply = { status: number; data?: unknown };
 
-const USER = { id: '0f6f5b1e-6b57-4c36-9d58-6c2f0a0b1c11', email: 'persona@demo.invalid', displayName: 'Persona demo', roles: ['DIRECTOR'] };
+const USER = { id: '0f6f5b1e-6b57-4c36-9d58-6c2f0a0b1c11', email: 'persona@demo.invalid', displayName: 'Persona demo', roles: ['DIRECTOR'], permissions: ['dashboard.read', 'users.read'] };
 let calls: Call[] = [];
 let replies: Record<string, Reply[]> = {};
 
@@ -36,20 +37,13 @@ beforeEach(() => {
 afterEach(() => setUnauthorizedHandler(null));
 
 describe('inicio de sesión', () => {
-  it('hace POST sin CSRF y luego confirma la sesión con GET /auth/me', async () => {
+  it('reutiliza la respuesta de POST sin una segunda solicitud a /auth/me', async () => {
     replies['POST /auth/login'] = [{ status: 201, data: { user: USER } }];
-    replies['GET /auth/me'] = [{ status: 200, data: { user: USER } }];
     const session = await auth.login({ email: USER.email, password: 'una-clave-larga-1' });
     expect(session).toEqual(USER);
-    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(['POST /auth/login', 'GET /auth/me']);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(['POST /auth/login']);
     expect(calls[0]!.csrf).toBeUndefined();
     expect(calls[0]!.body).toEqual({ email: USER.email, password: 'una-clave-larga-1' });
-  });
-
-  it('informa si la cookie de sesión no quedó establecida', async () => {
-    replies['POST /auth/login'] = [{ status: 201, data: { user: USER } }];
-    replies['GET /auth/me'] = [{ status: 401 }];
-    await expect(auth.login({ email: USER.email, password: 'una-clave-larga-1' })).rejects.toBeInstanceOf(SessionNotEstablishedError);
   });
 
   it('propaga el 401 de credenciales inválidas sin tratarlo como sesión caducada', async () => {
@@ -84,12 +78,13 @@ describe('CSRF en escrituras', () => {
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(2);
   });
 
-  it('no usa CSRF en la recuperación de contraseña (rutas públicas)', async () => {
+  it('solicita recuperación sin CSRF y completa los enlaces en Supabase', async () => {
     await auth.requestPasswordReset('persona@demo.invalid');
     await auth.resetPassword({ token: 't'.repeat(40), password: 'otra-clave-larga-1' });
     await auth.acceptInvitation({ token: 't'.repeat(40), password: 'otra-clave-larga-1' });
-    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(['POST /auth/forgot-password', 'POST /auth/reset-password', 'POST /auth/accept-invitation']);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(['POST /auth/forgot-password']);
     expect(calls.every((c) => c.csrf === undefined)).toBe(true);
+    expect(setSupabasePassword).toHaveBeenCalledTimes(2);
   });
 
   it('considera cerrada la sesión si el cierre responde 401', async () => {
@@ -127,23 +122,6 @@ describe('sesión y rutas protegidas', () => {
     clearSession();
     expect(queryClient.getQueryData(['users'])).toBeUndefined();
     expect(queryClient.getQueryData(SESSION_KEY)).toBeNull();
-  });
-});
-
-describe('opciones del menú según roles', () => {
-  it('solo orienta la interfaz con la matriz inicial documentada', () => {
-    expect(roleHintAllows(['DIRECTOR'], 'users.read')).toBe(true);
-    expect(roleHintAllows(['DIRECTOR'], 'users.create')).toBe(false);
-    expect(roleHintAllows(['AUDITOR'], 'audit.read')).toBe(true);
-    expect(roleHintAllows(['DOCENTE'], 'audit.read')).toBe(false);
-    expect(roleHintAllows(['SYSTEM_ADMIN'], 'roles.assign')).toBe(true);
-    expect(roleHintAllows([], undefined)).toBe(true);
-    expect(roleHintAllows(['DOCENTE'], 'cases.read')).toBe(false);
-    expect(roleHintAllows(['CONVIVENCIA'], 'cases.close')).toBe(true);
-    expect(roleHintAllows(['INSPECTOR_GENERAL'], 'cases.close')).toBe(false);
-    expect(roleHintAllows(['DIRECTOR'], 'cases.read')).toBe(false);
-    // Un permiso que la tabla no conoce nunca se oculta: decide el servidor.
-    expect(roleHintAllows(['DOCENTE'], 'permiso.futuro')).toBe(true);
   });
 });
 

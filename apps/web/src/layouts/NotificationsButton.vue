@@ -14,7 +14,8 @@ import type { AppNotification } from '@/types/api';
  * datos del expediente; al abrir una notificación se marca como leída (confirmado por el servidor) y se navega al expediente.
  */
 const { can } = useSession();
-const { query, unread, unreadCount, markRead } = useNotifications();
+const isOpen = ref(false);
+const { query, unread, unreadCount, markRead } = useNotifications(isOpen);
 const router = useRouter();
 const panel = ref<InstanceType<typeof Popover> | null>(null);
 const latest = computed(() => (query.data.value ?? []).slice(0, 6));
@@ -24,18 +25,24 @@ async function open(notification: AppNotification) {
   if (!notification.readAt) await markRead.mutateAsync(notification.id).catch(() => undefined);
   if (notification.caseId) await router.push({ name: 'cases-detail', params: { id: notification.caseId } });
 }
+
+function toggle(event: Event) {
+  isOpen.value = !isOpen.value;
+  if (isOpen.value) void query.refetch();
+  panel.value?.toggle(event);
+}
 </script>
 
 <template>
   <div v-if="can('notifications.read')">
     <button
       type="button" class="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      :aria-label="unreadCount ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones'" aria-haspopup="dialog" @click="panel?.toggle($event)"
+      :aria-label="unreadCount ? `Notificaciones, ${unreadCount} sin leer` : 'Notificaciones'" aria-haspopup="dialog" @click="toggle"
     >
       <AppIcon name="bell" :size="19" />
       <span v-if="unreadCount" class="absolute right-0.5 top-0.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-700 px-1 text-[0.625rem] font-semibold leading-none text-white" aria-hidden="true">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
     </button>
-    <Popover ref="panel" :pt="{ content: { class: 'p-0' } }">
+    <Popover ref="panel" :pt="{ content: { class: 'p-0' } }" @hide="isOpen = false">
       <div class="w-[min(22rem,calc(100vw-2rem))]">
         <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <p class="text-sm font-semibold text-slate-900">Notificaciones</p>

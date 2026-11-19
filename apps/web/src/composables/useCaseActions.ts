@@ -14,13 +14,14 @@ export const useCaseReferrals = (caseId: Id, enabled: Enabled = true) =>
   useQuery({ queryKey: computed(() => ['case', toValue(caseId), 'referrals']), queryFn: () => ops.listCaseReferrals(toValue(caseId)), enabled });
 
 export const useSummonsList = (query: MaybeRefOrGetter<ops.ActionListQuery<SummonsStatus> & { from?: string; to?: string }>, enabled: Enabled = true) =>
-  useQuery({ queryKey: computed(() => ['summons', 'list', toValue(query)]), queryFn: () => ops.listSummons(toValue(query)), enabled, placeholderData: keepPreviousData });
+  useQuery({ queryKey: computed(() => ['summons', 'list', toValue(query)]), queryFn: ({ signal }) => ops.listSummons(toValue(query), { signal }), enabled, placeholderData: keepPreviousData });
 export const useReferralsList = (query: MaybeRefOrGetter<ops.ActionListQuery<ReferralStatus>>, enabled: Enabled = true) =>
-  useQuery({ queryKey: computed(() => ['referrals', 'list', toValue(query)]), queryFn: () => ops.listReferrals(toValue(query)), enabled, placeholderData: keepPreviousData });
+  useQuery({ queryKey: computed(() => ['referrals', 'list', toValue(query)]), queryFn: ({ signal }) => ops.listReferrals(toValue(query), { signal }), enabled, placeholderData: keepPreviousData });
 
 const scope = (caseId: string) => [...caseScope(caseId), ['summons'], ['referrals'], ['audit']];
 
 export const useCreateSummons = (caseId: string) => useApiMutation((input: SummonsInput) => ops.createSummons(caseId, input), () => scope(caseId));
 export const useUpdateSummons = (caseId: string) => useApiMutation((input: { id: string } & UpdateSummonsInput) => { const { id, ...body } = input; return ops.updateSummons(caseId, id, body); }, () => scope(caseId));
+export const useSendSummonsEmail = (caseId: string) => useApiMutation((input: { id: string; expectedVersion: number; recipientEmail: string }) => { const { id, ...body } = input; return ops.sendSummonsEmail(caseId, id, body); }, () => scope(caseId));
 export const useCreateReferral = (caseId: string) => useApiMutation((input: ReferralInput) => ops.createReferral(caseId, input), () => scope(caseId));
 export const useUpdateReferral = (caseId: string) => useApiMutation((input: { id: string } & UpdateReferralInput) => { const { id, ...body } = input; return ops.updateReferral(caseId, id, body); }, () => scope(caseId));

@@ -5,4 +5,6 @@ import { DatabaseModule } from '../../database/database.module';
 import { InstitutionsModule } from '../institutions/institutions.module';
 import { InterviewsController } from './interviews.controller';
 import { InterviewsService } from './interviews.service';
-@Module({ imports: [DatabaseModule, AdminSecurityModule, SecurityAuditModule, InstitutionsModule], controllers: [InterviewsController], providers: [InterviewsService] }) export class InterviewsModule {}
+import { CaseOperationsModule } from '../case-operations/case-operations.module';
+import { InterviewPdfService } from './interview-pdf.service';
+@Module({ imports: [DatabaseModule, AdminSecurityModule, SecurityAuditModule, InstitutionsModule, CaseOperationsModule], controllers: [InterviewsController], providers: [InterviewsService, InterviewPdfService] }) export class InterviewsModule {}

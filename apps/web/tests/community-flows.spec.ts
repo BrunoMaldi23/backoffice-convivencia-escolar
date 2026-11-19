@@ -73,13 +73,12 @@ describe('cursos, estudiantes y apoderados', () => {
   });
 
   it('importa todo o nada y crea los cursos que faltan', async () => {
-    const id = establishmentId();
     const rows = [{ rut: rut(6000001), firstNames: 'Luis', lastNames: 'Peña', courseName: '3° Medio A' }, { rut: rut(6000002), firstNames: 'Eva', lastNames: 'Mora' }];
     const before = fake.db.students.length;
-    expect(httpStatus(await rejection(community.importStudents({ establishmentId: id, academicYear: 2026, rows: [...rows, { rut: '1-9', firstNames: 'X', lastNames: 'Y' }] })))).toBe(400);
+    expect(httpStatus(await rejection(community.importStudents({ academicYear: 2026, rows: [...rows, { rut: '1-9', firstNames: 'X', lastNames: 'Y' }] })))).toBe(400);
     expect(fake.db.students).toHaveLength(before);
-    expect(await community.importStudents({ establishmentId: id, academicYear: 2026, rows })).toEqual({ created: 2, updated: 0, createdCourses: 1 });
-    expect(await community.importStudents({ establishmentId: id, academicYear: 2026, rows: [rows[0]!] })).toEqual({ created: 0, updated: 1, createdCourses: 0 });
+    expect(await community.importStudents({ academicYear: 2026, rows })).toEqual({ created: 2, updated: 0, createdCourses: 1, guardiansCreated: 0, guardiansUpdated: 0, linksCreated: 0 });
+    expect(await community.importStudents({ academicYear: 2026, rows: [rows[0]!] })).toEqual({ created: 0, updated: 1, createdCourses: 0, guardiansCreated: 0, guardiansUpdated: 0, linksCreated: 0 });
   });
 
   it('gestiona cursos sin duplicados y con control de versión', async () => {
@@ -138,6 +137,17 @@ describe('citaciones', () => {
     const programmed = await ops.listSummons({ status: 'PROGRAMADA' });
     expect(programmed.items.length).toBeGreaterThan(0);
     expect(programmed.items.every((s) => s.status === 'PROGRAMADA' && s.case)).toBe(true);
+  });
+
+  it('descarga la carta y registra sólo el envío exitoso de una citación programada', async () => {
+    const target = openCase();
+    const summons = await ops.createSummons(target.id, { recipientLabel: 'Apoderado/a de prueba', scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), location: 'Sala 1', reason: 'Conversar sobre el caso' });
+    const letter = await ops.downloadSummonsLetter(target.id, summons.id);
+    expect(await letter.text()).toContain('Carta de citación');
+    const sent = await ops.sendSummonsEmail(target.id, summons.id, { expectedVersion: summons.version, recipientEmail: 'apoderado@demo.invalid' });
+    expect(sent.emailSentAt).not.toBeNull();
+    expect(sent.version).toBe(summons.version + 1);
+    expect(isConflict(await rejection(ops.sendSummonsEmail(target.id, summons.id, { expectedVersion: summons.version, recipientEmail: 'apoderado@demo.invalid' })))).toBe(true);
   });
 });
 

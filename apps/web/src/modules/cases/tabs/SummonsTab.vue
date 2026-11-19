@@ -11,11 +11,13 @@ import MutationDialog from '@/components/MutationDialog.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
-import { useCaseSummons, useCreateSummons, useUpdateSummons } from '@/composables/useCaseActions';
+import { useCaseSummons, useCreateSummons, useSendSummonsEmail, useUpdateSummons } from '@/composables/useCaseActions';
 import { useCaseParticipants } from '@/composables/useCaseContent';
 import { useSession } from '@/composables/useSession';
 import { dateToIso, formatDateTime, isoToDate } from '@/lib/format';
-import { maxLength, minLength, required, validateAll } from '@/lib/validation';
+import { downloadSummonsLetter } from '@/services/caseOperations';
+import { saveBlob } from '@/lib/download';
+import { email, maxLength, minLength, required, validateAll } from '@/lib/validation';
 import type { CaseRecord, CaseSummons, SummonsStatus } from '@/types/api';
 
 /**
@@ -28,6 +30,7 @@ const query = useCaseSummons(() => props.caseRecord.id);
 const participants = useCaseParticipants(() => props.caseRecord.id, () => can('participants.read'));
 const create = useCreateSummons(props.caseRecord.id);
 const update = useUpdateSummons(props.caseRecord.id);
+const sendEmail = useSendSummonsEmail(props.caseRecord.id);
 const closed = computed(() => props.caseRecord.status === 'CERRADO');
 
 const OTHER = '__otro__';
@@ -69,6 +72,17 @@ async function submitAct() {
   } catch { /* el error se muestra en el diálogo */ }
 }
 const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.scheduledAt).getTime() < Date.now();
+async function downloadLetter(summons: CaseSummons) { saveBlob(await downloadSummonsLetter(props.caseRecord.id, summons.id), `citacion-exp-${String(props.caseRecord.folio).padStart(4, '0')}.pdf`); }
+const emailTarget = ref<CaseSummons | null>(null);
+const emailOpen = computed({ get: () => Boolean(emailTarget.value), set: (value: boolean) => { if (!value) emailTarget.value = null; } });
+const emailForm = reactive({ recipientEmail: '' });
+const emailErrors = ref<Record<string, string>>({});
+function openEmail(summons: CaseSummons) { emailTarget.value = summons; emailForm.recipientEmail = ''; emailErrors.value = {}; sendEmail.reset(); }
+async function submitEmail() {
+  emailErrors.value = validateAll(emailForm, { recipientEmail: [required('Indique el correo del destinatario.'), email(), maxLength(180)] }) as Record<string, string>;
+  if (Object.keys(emailErrors.value).length || !emailTarget.value) return;
+  try { await sendEmail.mutateAsync({ id: emailTarget.value.id, expectedVersion: emailTarget.value.version, recipientEmail: emailForm.recipientEmail.trim() }); emailOpen.value = false; } catch { /* el error se muestra en el diálogo */ }
+}
 </script>
 
 <template>
@@ -85,6 +99,10 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
               <p class="min-w-0 flex-1 break-words text-sm font-semibold text-slate-900">{{ s.recipientLabel }}</p>
               <div class="flex items-center gap-2">
                 <StatusBadge :status="s.status" />
+                <div class="flex items-center gap-1">
+                  <Button v-if="can('summons.read')" size="small" severity="secondary" text aria-label="Descargar carta de citación en PDF" title="Descargar carta PDF" @click="downloadLetter(s)"><template #icon><AppIcon name="download" :size="16" /></template></Button>
+                  <Button v-if="can('summons.manage') && s.status === 'PROGRAMADA' && !closed" size="small" severity="secondary" text aria-label="Enviar citación por correo" title="Enviar citación por correo" @click="openEmail(s)"><template #icon><AppIcon name="mail" :size="16" /></template></Button>
+                </div>
                 <div v-if="can('summons.manage') && s.status === 'PROGRAMADA' && !closed" class="flex items-center gap-1">
                   <Button size="small" severity="success" text aria-label="Registrar reunión realizada" title="Registrar reunión realizada" @click="openAct(s, 'REALIZADA')"><template #icon><AppIcon name="check-circle" :size="16" /></template></Button>
                   <Button size="small" severity="secondary" text aria-label="Registrar inasistencia" title="Registrar inasistencia" @click="openAct(s, 'NO_ASISTIO')"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
@@ -98,6 +116,7 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
               <div class="flex gap-1"><dt class="text-slate-500">Fecha:</dt><dd :class="['tabular-nums', isLate(s) ? 'font-semibold text-red-800' : '']">{{ formatDateTime(s.scheduledAt) }}<span v-if="isLate(s)"> (sin cerrar)</span></dd></div>
               <div class="flex gap-1"><dt class="text-slate-500">Lugar:</dt><dd class="break-words">{{ s.location }}</dd></div>
               <div v-if="s.outcomeNote" class="flex gap-1 sm:col-span-2"><dt class="text-slate-500">Resultado:</dt><dd class="whitespace-pre-line break-words">{{ s.outcomeNote }}</dd></div>
+              <div v-if="s.emailSentAt" class="flex gap-1 sm:col-span-2"><dt class="text-slate-500">Último envío:</dt><dd>{{ formatDateTime(s.emailSentAt) }}</dd></div>
             </dl>
           </li>
         </ul>
@@ -133,5 +152,10 @@ const isLate = (s: CaseSummons) => s.status === 'PROGRAMADA' && new Date(s.sched
       <template #default="{ id, invalid }"><Textarea :id="id" v-model="act.note" rows="3" auto-resize maxlength="2000" :invalid="invalid" class="w-full" /></template>
     </FormField>
     <p v-if="acting && acting.mode !== 'EDITAR'" class="text-xs text-slate-500">Al cerrar la citación ya no podrá modificarse.</p>
+  </MutationDialog>
+
+  <MutationDialog v-model:visible="emailOpen" header="Enviar citación por correo" submit-label="Enviar carta PDF" :pending="sendEmail.isPending.value" :error="sendEmail.error.value" @submit="submitEmail" @reload="query.refetch()">
+    <p class="text-sm leading-relaxed text-slate-700">Se adjuntará la carta PDF. El correo se usa sólo para este envío y no queda guardado en el expediente ni en la auditoría.</p>
+    <FormField id="sm-email" label="Correo del destinatario" required :error="emailErrors.recipientEmail"><template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="emailForm.recipientEmail" type="email" maxlength="180" autocomplete="email" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template></FormField>
   </MutationDialog>
 </template>

@@ -104,6 +104,8 @@ describe('Casos HTTP con PostgreSQL', () => {
     const created = await writer.agent.post('/api/cases').set('X-CSRF-Token', writer.csrf).send(caseInput()).expect(201);
     expect(created.body.folio).toBe(1);
     expect(created.body.version).toBe(1);
+    const detail = await writer.agent.get(`/api/cases/${created.body.id}`).expect(200);
+    expect(detail.body.currentStage).toMatchObject({ id: stageId, code: 'RECEPCION', name: 'Recepción' });
     const timeline = await writer.agent.get(`/api/cases/${created.body.id}/timeline`).expect(200);
     expect(timeline.body.total).toBe(1);
     expect(timeline.body.items[0]).toMatchObject({ eventType: 'CASE_CREATED', caseId: created.body.id });

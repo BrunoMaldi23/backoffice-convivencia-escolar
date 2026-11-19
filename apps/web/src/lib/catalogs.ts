@@ -64,7 +64,7 @@ export function transitionNeedsReason(from: CaseStatus, to: CaseStatus): boolean
 export function transitionLabel(from: CaseStatus, to: CaseStatus): string {
   if (to === 'CERRADO') return 'Cerrar caso';
   if (from === 'CERRADO') return 'Reabrir caso';
-  if (to === 'PAUSADO') return 'Pausar';
+  if (to === 'PAUSADO') return 'Pausar expediente';
   if (from === 'PAUSADO') return to === 'EN_PROCESO' ? 'Reanudar en proceso' : 'Reanudar evaluación';
   if (to === 'RESUELTO') return 'Marcar como resuelto';
   if (from === 'RESUELTO' && to === 'EN_PROCESO') return 'Volver a proceso';
@@ -79,7 +79,7 @@ export const EVENT_LABELS: Record<CaseEventType, string> = {
   INTERVIEW_FINALIZED: 'Entrevista finalizada', INTERVIEW_CORRECTED: 'Entrevista reabierta para corrección', INTERVIEW_VOIDED: 'Entrevista anulada', DOCUMENT_UPLOADED: 'Documento cargado', DOCUMENT_VOIDED: 'Documento anulado',
   PROTOCOL_APPLIED: 'Protocolo aplicado', PROTOCOL_REVOKED: 'Aplicación de protocolo revocada', MEASURE_CREATED: 'Medida registrada', MEASURE_UPDATED: 'Medida actualizada', FOLLOW_UP_CREATED: 'Seguimiento registrado', FOLLOW_UP_VOIDED: 'Seguimiento anulado',
   TASK_CREATED: 'Tarea creada', TASK_UPDATED: 'Tarea actualizada', TASK_COMPLETED: 'Tarea completada', TASK_CANCELLED: 'Tarea cancelada', NOTIFICATION_CREATED: 'Notificación emitida', SUMMONS_CREATED: 'Citación registrada',
-  SUMMONS_UPDATED: 'Citación actualizada', REFERRAL_CREATED: 'Derivación registrada', REFERRAL_UPDATED: 'Derivación actualizada'
+  SUMMONS_UPDATED: 'Citación actualizada', SUMMONS_EMAIL_SENT: 'Citación enviada por correo', REFERRAL_CREATED: 'Derivación registrada', REFERRAL_UPDATED: 'Derivación actualizada'
 };
 export const eventLabel = (type: string) => EVENT_LABELS[type as CaseEventType] ?? type.replace(/_/g, ' ').toLowerCase();
 

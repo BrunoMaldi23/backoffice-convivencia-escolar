@@ -1,4 +1,4 @@
-import axios, { type InternalAxiosRequestConfig } from 'axios';
+import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 
 /**
  * Cliente HTTP único. La sesión viaja en la cookie HttpOnly `bce_session` (por eso `withCredentials`);
@@ -12,8 +12,10 @@ export const api = axios.create({
   timeout: 15_000
 });
 
+/** Opciones exclusivas de lecturas cancelables desde Vue Query. */
+export type ReadRequestOptions = Pick<AxiosRequestConfig, 'signal'>;
 export interface HealthResponse { status: 'ok' | 'error'; database: 'connected' | 'disconnected'; timestamp: string; }
-export async function getHealth(): Promise<HealthResponse> { return (await api.get<HealthResponse>('/health')).data; }
+export async function getHealth(options?: ReadRequestOptions): Promise<HealthResponse> { return (await api.get<HealthResponse>('/health', options)).data; }
 
 const SAFE_METHODS = new Set(['get', 'head', 'options']);
 /** Escrituras públicas: el contrato no exige CSRF (aún no hay sesión). */
@@ -34,8 +36,21 @@ export function resetCsrf(): void {
   csrfRequest = null;
 }
 
+/** La API entrega este cookie legible junto con la sesión para el patrón double-submit CSRF. */
+function csrfFromCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const prefix = 'bce_csrf=';
+  const cookie = document.cookie.split('; ').find((value) => value.startsWith(prefix));
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+}
+
 async function loadCsrf(): Promise<string> {
   if (csrfToken) return csrfToken;
+  const fromCookie = csrfFromCookie();
+  if (fromCookie) {
+    csrfToken = fromCookie;
+    return fromCookie;
+  }
   csrfRequest ??= api
     .get<{ token?: string }>('/auth/csrf')
     .then(({ data }) => {

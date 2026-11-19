@@ -43,7 +43,7 @@ const unlinkOpen = computed({ get: () => Boolean(toUnlink.value), set: (v: boole
 const details = computed<DetailItem[]>(() => {
   const s = student.value;
   return s ? [
-    { key: 'rut', label: 'RUT', value: formatRut(s.rut) }, { key: 'birth', label: 'Fecha de nacimiento', value: formatCalendarDate(s.birthDate) },
+    { key: 'rut', label: 'RUT', value: formatRut(s.rut) }, { key: 'sex', label: 'Sexo', value: s.sex ?? '—' }, { key: 'birth', label: 'Fecha de nacimiento', value: formatCalendarDate(s.birthDate) }, { key: 'email', label: 'Correo', value: s.email ?? '—' },
     { key: 'course', label: 'Curso', value: s.course ? `${s.course.name} (${s.course.academicYear})` : 'Sin curso' }, { key: 'created', label: 'Registrado el', value: formatDate(s.createdAt) }
   ] : [];
 });

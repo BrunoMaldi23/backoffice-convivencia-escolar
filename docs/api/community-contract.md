@@ -37,11 +37,11 @@ Las citaciones y derivaciones pertenecen a un expediente y siguen su alcance (cr
 | GET `/students/:id/cases` | `students.read` y `cases.read` | Expedientes visibles donde figura como involucrado: `[{id,folio,title,status,priority,receivedAt,participationCode}]` |
 | POST `/students/:id/guardians` | `students.manage` y `guardians.manage` | `{guardianId,relationship,isPrimary}`; si `isPrimary`, los demás dejan de serlo |
 | POST `/students/:id/guardians/:guardianId/unlink` | `students.manage` y `guardians.manage` | — |
-| POST `/students/import` | `students.manage` | `{establishmentId,academicYear,rows:[{rut,firstNames,lastNames,birthDate?,courseName?}]}` (1–500 filas) |
+| POST `/students/import` | `students.manage` | `{establishmentId,academicYear,rows:[{rut,firstNames,lastNames,sex?,birthDate?,email?,courseName?,mother?,father?,guardian?}]}` (1–500 filas) |
 
 El RUT se valida con su dígito verificador y se guarda normalizado (`12345678-5`); un RUT inválido responde 400 y uno repetido en el establecimiento, 409.
 
-**Carga masiva**: todo o nada. Si alguna fila es inválida (RUT, nombres vacíos, fecha, RUT repetido en el archivo) responde 400 con `errors:[{row,message}]` (máximo 50) y no escribe nada. Si todo es válido crea los estudiantes nuevos, actualiza nombres y curso de los existentes (por RUT, reactivándolos) y crea los cursos que falten para `academicYear`. Responde `{created,updated,createdCourses}`.
+**Carga masiva**: todo o nada. La plantilla institucional reconoce las columnas del estudiante y de madre, padre y apoderado/a. Cada contacto usa `{rut?,firstNames,lastNames,birthDate?,phone?,email?,address?}`. Si alguna fila es inválida (RUN, nombres vacíos, fecha o RUN de estudiante repetido en el archivo) responde 400 con `errors:[{row,message}]` (máximo 50) y no escribe nada. Si todo es válido crea los estudiantes nuevos, actualiza sus datos y curso por RUN, crea los cursos faltantes para `academicYear` y vincula madre, padre y apoderado/a; este último queda como principal. Un contacto con el mismo RUN se reutiliza, por lo que no se duplica. Responde `{created,updated,createdCourses,guardiansCreated,guardiansUpdated,linksCreated}`.
 
 ## Apoderados y funcionarios
 
@@ -66,9 +66,13 @@ El RUT se valida con su dígito verificador y se guarda normalizado (`12345678-5
 | GET `/cases/:caseId/summons` | `summons.read` | — |
 | POST `/cases/:caseId/summons` | `summons.manage` | `{participantId?,recipientLabel?,scheduledAt,location,reason}`; se exige uno de los dos destinatarios |
 | POST `/cases/:caseId/summons/:id/update` | `summons.manage` | `{expectedVersion,status?,scheduledAt?,location?,reason?,outcomeNote?}` |
+| GET `/cases/:caseId/summons/:id/letter` | `summons.read` | Descarga la carta PDF autorizada |
+| POST `/cases/:caseId/summons/:id/send-email` | `summons.manage` | `{expectedVersion,recipientEmail}`; adjunta la carta PDF |
 | GET `/summons` | `summons.read` | `establishmentId?`, `status?`, `from?`, `to?` (sobre `scheduledAt`), paginación; cada ítem incluye `case:{id,folio,title,status,establishmentId}` |
 
 Estados: `PROGRAMADA` → `REALIZADA` \| `NO_ASISTIO` \| `CANCELADA`. Solo una citación `PROGRAMADA` admite cambios (reprogramar, cambiar lugar o motivo, cerrar); las demás responden 409. Cancelar exige `outcomeNote` (400).
+
+La carta se genera en el servidor al descargar o enviar, por lo que siempre contiene la fecha, lugar y motivo vigentes. El envío es explícito, sólo está disponible mientras la citación está programada y actualiza `emailSentAt`. La dirección del destinatario se usa sólo para el transporte SMTP: no queda almacenada en la citación ni en la auditoría. Si el correo no está configurado o falla, responde 503 y la citación queda sin cambio.
 
 ## Derivaciones
 
@@ -83,7 +87,7 @@ Estados: `PENDIENTE` → `ENVIADA` \| `CERRADA`; `ENVIADA` → `CON_RESPUESTA` \
 
 ## Línea de tiempo
 
-Nuevos eventos: `SUMMONS_CREATED`, `SUMMONS_UPDATED`, `REFERRAL_CREATED`, `REFERRAL_UPDATED`.
+Nuevos eventos: `SUMMONS_CREATED`, `SUMMONS_UPDATED`, `SUMMONS_EMAIL_SENT`, `REFERRAL_CREATED`, `REFERRAL_UPDATED`.
 
 ## Permisos nuevos (seed `rbac_seed_v4`)
 

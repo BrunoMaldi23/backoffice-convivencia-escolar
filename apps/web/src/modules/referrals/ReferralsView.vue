@@ -17,7 +17,7 @@ import type { CaseReferral, ReferralStatus } from '@/types/api';
  * avanzarlas de estado se abre el expediente (pestaña Derivaciones).
  */
 const PAGE_SIZE = 20;
-const values = ref<Record<string, string | null>>({ status: null });
+const values = ref<Record<string, string | null>>({ status: 'PENDIENTE' });
 const page = ref(1);
 watch(values, () => { page.value = 1; }, { deep: true });
 const filters: FilterDef[] = [{ field: 'status', label: 'Estado', options: optionsFrom(['PENDIENTE', 'ENVIADA', 'CON_RESPUESTA', 'CERRADA']) }];

@@ -9,20 +9,19 @@ Base URL: `http://localhost:3000/api`. Todas las solicitudes desde Vue usan `wit
 | GET | `/auth/csrf` | cookie de sesión | 200 `{token}` |
 | POST | `/auth/logout` | cookie y `X-CSRF-Token` | 201 `{success:true}` |
 
-`user` contiene `id`, `email`, `displayName` y `roles: string[]`. Los roles sirven para presentación; el servidor comprueba los permisos efectivos desde PostgreSQL en cada solicitud administrativa. No se devuelven hashes ni tokens de sesión.
+`user` contiene `id`, `email`, `displayName`, `roles: string[]` y `permissions: string[]`. `roles` sirve para identificar el perfil; `permissions` es la unión efectiva de sus roles al momento de responder y permite que Vue habilite u oculte acciones. El servidor vuelve a comprobar los permisos efectivos desde PostgreSQL en cada solicitud administrativa; no confíe en el cliente. No se devuelven hashes ni tokens de sesión.
 
 `bce_session`: opaca, HttpOnly, SameSite=Strict, Path=/, duración 12 horas y Secure con `NODE_ENV=production`. `bce_csrf`: SameSite=Strict, legible por JavaScript; el valor también está disponible mediante `GET /auth/csrf`. El hash CSRF se guarda en la sesión. Todas las rutas administrativas que escriben y `POST /auth/logout` requieren el encabezado `X-CSRF-Token`. `POST /auth/login`, recuperación y aceptación de invitación son públicos y tienen límites de frecuencia.
 
 ```ts
 import axios from 'axios';
 const api = axios.create({ baseURL: 'http://localhost:3000/api', withCredentials: true });
-await api.post('/auth/login', { email, password });
-const { data: session } = await api.get('/auth/me');
-const { data: csrf } = await api.get<{ token: string }>('/auth/csrf');
-await api.post('/auth/logout', {}, { headers: { 'X-CSRF-Token': csrf.token } });
+const { data: session } = await api.post('/auth/login', { email, password });
+const csrf = document.cookie.split('; ').find((cookie) => cookie.startsWith('bce_csrf='))?.slice('bce_csrf='.length);
+await api.post('/auth/logout', {}, { headers: { 'X-CSRF-Token': csrf } });
 ```
 
-Para `PATCH /users/:id`, por ejemplo, obtenga primero el CSRF y envíelo en el mismo encabezado. No almacene la sesión en `localStorage`. Ante `401`, limpie el estado local y redirija a ingreso. `403` indica permiso insuficiente o CSRF ausente/incorrecto; muestre un mensaje sin repetir automáticamente la escritura. `400` indica DTO inválido, `409` conflicto y `429` límite de solicitudes. NestJS devuelve normalmente `{statusCode, message, error}`; `message` puede ser una lista de validaciones. No use ese texto como clave de lógica de cliente.
+La respuesta del ingreso ya entrega el usuario; use `GET /auth/me` al restaurar una sesión al recargar. Para `PATCH /users/:id`, use el cookie CSRF legible entregado al iniciar sesión y envíelo en el encabezado, sin pedir otro viaje a la API. No almacene la sesión en `localStorage`. Ante `401`, limpie el estado local y redirija a ingreso. `403` indica permiso insuficiente o CSRF ausente/incorrecto; muestre un mensaje sin repetir automáticamente la escritura. `400` indica DTO inválido, `409` conflicto y `429` límite de solicitudes. NestJS devuelve normalmente `{statusCode, message, error}`; `message` puede ser una lista de validaciones. No use ese texto como clave de lógica de cliente.
 
 La documentación de recuperación e invitación está en [password-recovery-contract.md](password-recovery-contract.md).
 

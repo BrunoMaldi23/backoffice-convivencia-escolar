@@ -20,7 +20,7 @@ import type { AuditEntry } from '@/types/api';
  * Auditoría de seguridad en solo lectura (`GET /audit`, filtros por evento y recurso, paginación del servidor). Los metadatos que
  * entrega el backend nunca incluyen contraseñas, códigos ni cookies. No existe ninguna acción de edición ni eliminación.
  */
-const { nameOf } = useDirectory();
+const { nameOf } = useDirectory({ includeAllUsers: true });
 const action = ref<string | null>(null);
 const targetType = ref<string | null>(null);
 const page = ref(1);

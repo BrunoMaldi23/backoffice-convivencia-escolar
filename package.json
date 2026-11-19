@@ -14,5 +14,18 @@
     "typecheck": "pnpm --filter @backoffice/shared typecheck && pnpm --filter @backoffice/web typecheck && pnpm --filter @backoffice/api typecheck",
     "test": "pnpm --filter @backoffice/web test && pnpm --filter @backoffice/api test",
     "db:migrate": "pnpm --filter @backoffice/api prisma:migrate"
+  },
+  "pnpm": {
+    "overrides": {
+      "body-parser": "2.4.0",
+      "deepmerge-ts": "8.0.0",
+      "effect": "3.20.0",
+      "follow-redirects": "1.16.2",
+      "js-yaml": "4.3.2",
+      "lodash": "4.18.0",
+      "multer": "2.5.0",
+      "path-to-regexp": "8.4.0",
+      "qs": "6.17.1"
+    }
   }
 }

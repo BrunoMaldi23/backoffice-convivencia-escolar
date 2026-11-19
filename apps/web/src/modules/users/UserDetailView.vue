@@ -81,7 +81,7 @@ async function runConfirmed() {
     <LoadingState v-if="query.isPending.value" :rows="5" />
     <template v-else-if="record">
       <PageHeader :title="record.displayName" :description="record.email" :back="{ to: { name: 'users' }, label: 'Volver a usuarios' }">
-        <template #badges><StatusBadge :status="record.isActive ? 'ACTIVO' : 'INACTIVO'" /></template>
+        <template #badges><StatusBadge :status="record.isActive ? 'ACTIVO' : record.invitationPending ? 'PENDIENTE' : 'INACTIVO'" /></template>
         <template v-if="can('users.update')" #actions><Button label="Editar datos" severity="secondary" outlined @click="openEdit"><template #icon><AppIcon name="pencil" :size="15" /></template></Button></template>
       </PageHeader>
       <p v-if="notice" class="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status"><AppIcon name="check-circle" :size="16" class="mt-0.5 shrink-0" />{{ notice }}</p>
@@ -94,9 +94,10 @@ async function runConfirmed() {
               <div class="min-w-0"><p class="break-words font-semibold text-slate-900">{{ record.displayName }}</p><p class="break-all text-sm text-slate-600">{{ record.email }}</p></div>
             </div>
             <DetailPanel :items="[{ key: 'status', label: 'Estado' }, { key: 'created', label: 'Creación', value: formatDate(record.createdAt) }, { key: 'updated', label: 'Última modificación', value: formatDateTime(record.updatedAt) }]">
-              <template #item-status><StatusBadge :status="record.isActive ? 'ACTIVO' : 'INACTIVO'" /></template>
+              <template #item-status><StatusBadge :status="record.isActive ? 'ACTIVO' : record.invitationPending ? 'PENDIENTE' : 'INACTIVO'" /></template>
             </DetailPanel>
-            <p v-if="!record.isActive" class="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900">La cuenta está inactiva: puede estar desactivada o con la invitación pendiente de aceptar. La API no distingue ambos casos; si es una invitación pendiente, use “Reenviar invitación”.</p>
+            <p v-if="record.invitationPending" class="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900">La invitación está pendiente de aceptar. Puede reenviarla si la persona no recibió el correo.</p>
+            <p v-else-if="!record.isActive" class="mt-4 rounded-md bg-slate-100 px-3 py-2 text-sm leading-relaxed text-slate-700">La cuenta está desactivada y no puede iniciar sesión.</p>
           </SectionCard>
 
           <SectionCard dense title="Roles" description="Cambiar los roles cierra todas las sesiones de la persona.">
@@ -115,7 +116,7 @@ async function runConfirmed() {
           <ul class="space-y-4 text-sm">
             <li v-if="can('users.update')">
               <p class="font-medium text-slate-900">Invitación</p><p class="mt-0.5 text-slate-600">Envía un código nuevo e invalida el anterior.</p>
-              <Button label="Reenviar invitación" size="small" outlined class="mt-2" :disabled="record.isActive" :title="record.isActive ? 'La cuenta ya está activa' : undefined" @click="confirm = 'resend'" />
+              <Button label="Reenviar invitación" size="small" outlined class="mt-2" :disabled="!record.invitationPending" :title="record.invitationPending ? undefined : 'No hay una invitación pendiente para esta cuenta'" @click="confirm = 'resend'" />
             </li>
             <li v-if="can('users.update')">
               <p class="font-medium text-slate-900">Sesiones</p><p class="mt-0.5 text-slate-600">Cierra la sesión en todos los dispositivos.</p>
@@ -124,7 +125,8 @@ async function runConfirmed() {
             <li v-if="can('users.disable')" class="border-t border-slate-100 pt-4">
               <p class="font-medium text-slate-900">Acceso</p>
               <template v-if="record.isActive"><p class="mt-0.5 text-slate-600">Impide el ingreso sin eliminar el historial.</p><Button label="Desactivar cuenta" size="small" severity="danger" outlined class="mt-2" :disabled="isSelf" :title="isSelf ? 'No puede desactivar su propia cuenta' : undefined" @click="confirm = 'disable'" /></template>
-              <template v-else><p class="mt-0.5 text-slate-600">La cuenta no puede iniciar sesión.</p><Button label="Reactivar cuenta" size="small" outlined class="mt-2" @click="confirm = 'enable'" /></template>
+              <template v-else-if="!record.invitationPending"><p class="mt-0.5 text-slate-600">La cuenta no puede iniciar sesión.</p><Button label="Reactivar cuenta" size="small" outlined class="mt-2" @click="confirm = 'enable'" /></template>
+              <p v-else class="mt-0.5 text-slate-600">La persona debe aceptar la invitación antes de poder iniciar sesión.</p>
             </li>
           </ul>
           <p class="mt-5 text-xs leading-relaxed text-slate-500">Las cuentas no se eliminan: se desactivan para conservar la trazabilidad. El servidor impide desactivar al último administrador.</p>

@@ -40,7 +40,9 @@ class CreateStudentDto {
   @ApiProperty({ example: '12.345.678-5' }) @IsString() @MaxLength(15) rut!: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(120) firstNames!: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(120) lastNames!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(30) sex?: string;
   @ApiPropertyOptional({ example: '2015-03-21' }) @IsOptional() @IsDateString() birthDate?: string;
+  @ApiPropertyOptional() @IsOptional() @IsEmail() @MaxLength(180) email?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() courseId?: string;
 }
 class UpdateStudentDto {
@@ -48,7 +50,9 @@ class UpdateStudentDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(15) rut?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1) @MaxLength(120) firstNames?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1) @MaxLength(120) lastNames?: string;
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(30) sex?: string | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsDateString() birthDate?: string | null;
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsEmail() @MaxLength(180) email?: string | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsUUID() courseId?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
 }
@@ -57,15 +61,30 @@ class LinkGuardianDto {
   @ApiProperty({ example: 'MADRE' }) @IsString() @MinLength(2) @MaxLength(40) relationship!: string;
   @ApiProperty() @IsBoolean() isPrimary!: boolean;
 }
+class ImportGuardianDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(15) rut?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) firstNames?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) lastNames?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(10) birthDate?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(30) phone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsEmail() @MaxLength(180) email?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(240) address?: string;
+}
 class ImportRowDto {
   @ApiProperty() @IsString() @MaxLength(15) rut!: string;
   @ApiProperty() @IsString() @MaxLength(120) firstNames!: string;
   @ApiProperty() @IsString() @MaxLength(120) lastNames!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(10) birthDate?: string;
+  @ApiPropertyOptional({ example: 'Femenino' }) @IsOptional() @IsString() @MaxLength(30) sex?: string;
+  @ApiPropertyOptional() @IsOptional() @IsEmail() @MaxLength(180) email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) courseName?: string;
+  @ApiPropertyOptional({ type: () => ImportGuardianDto }) @IsOptional() @ValidateNested() @Type(() => ImportGuardianDto) mother?: ImportGuardianDto;
+  @ApiPropertyOptional({ type: () => ImportGuardianDto }) @IsOptional() @ValidateNested() @Type(() => ImportGuardianDto) father?: ImportGuardianDto;
+  @ApiPropertyOptional({ type: () => ImportGuardianDto }) @IsOptional() @ValidateNested() @Type(() => ImportGuardianDto) guardian?: ImportGuardianDto;
 }
 class ImportStudentsDto {
-  @ApiProperty() @IsUUID() establishmentId!: string;
+  /** En la plataforma institucional con un único establecimiento activo, la API resuelve el alcance internamente. */
+  @ApiPropertyOptional() @IsOptional() @IsUUID() establishmentId?: string;
   @ApiProperty() @Type(() => Number) @IsInt() @Min(2000) @Max(2100) academicYear!: number;
   @ApiProperty({ type: [ImportRowDto], description: 'Hasta 500 filas por carga' }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => ImportRowDto) rows!: ImportRowDto[];
 }
@@ -74,6 +93,8 @@ class CreateGuardianDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(15) rut?: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(120) firstNames!: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(120) lastNames!: string;
+  @ApiPropertyOptional({ example: '1980-03-21' }) @IsOptional() @IsDateString() birthDate?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(240) address?: string;
   @ApiPropertyOptional() @IsOptional() @IsEmail() @MaxLength(180) email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(30) phone?: string;
 }
@@ -82,6 +103,8 @@ class UpdateGuardianDto {
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(15) rut?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1) @MaxLength(120) firstNames?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(1) @MaxLength(120) lastNames?: string;
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsDateString() birthDate?: string | null;
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(240) address?: string | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsEmail() @MaxLength(180) email?: string | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(30) phone?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;

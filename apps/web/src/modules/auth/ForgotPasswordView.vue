@@ -30,11 +30,11 @@ function submit() {
     </RouterLink>
     <AuthTitle class="mt-6">Recuperar contraseña</AuthTitle>
     <p class="mt-4 text-sm leading-relaxed text-slate-600">
-      Ingrese su correo institucional. Si la cuenta existe, recibirá un código de un solo uso para crear una nueva contraseña.
+      Ingrese su correo institucional. Si la cuenta existe, recibirá un enlace seguro para crear una nueva contraseña.
     </p>
 
     <Message v-if="request.isSuccess.value" severity="success" :closable="false" class="mt-6">
-      Si la cuenta existe, recibirá instrucciones por correo. El código vence en 30 minutos.
+      Si la cuenta existe, recibirá instrucciones por correo. Abra el enlace para continuar.
     </Message>
 
     <form v-else novalidate class="mt-6 space-y-5" @submit.prevent="submit">
@@ -47,9 +47,5 @@ function submit() {
       <Button type="submit" label="Enviar código" class="w-full !border-action !bg-action hover:!border-action-dark hover:!bg-action-dark" :loading="request.isPending.value" />
     </form>
 
-    <p class="mt-8 text-sm text-slate-600">
-      ¿Ya tiene un código?
-      <RouterLink :to="{ name: 'reset-password' }" class="rounded font-semibold text-action hover:underline">Ingresar código</RouterLink>
-    </p>
   </div>
 </template>

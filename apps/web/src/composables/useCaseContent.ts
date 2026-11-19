@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/vue-query';
 import * as cases from '@/services/cases';
 import * as ops from '@/services/caseOperations';
 import type { DocumentKind, FollowUpInput, InterviewInput, MeasureInput, MeasureStatus, ParticipantKind, ReportInput, TaskInput, TaskStatus, UpdateReportInput } from '@/types/api';
+import type { ReadRequestOptions } from '@/services/api';
 import { caseScope, useApiMutation } from './useApiMutation';
 
 type Id = MaybeRefOrGetter<string>;
-const caseQuery = <T>(caseId: Id, name: string, fn: (id: string) => Promise<T>, enabled: MaybeRefOrGetter<boolean> = true) =>
-  useQuery({ queryKey: computed(() => ['case', toValue(caseId), name]), queryFn: () => fn(toValue(caseId)), enabled });
+const caseQuery = <T>(caseId: Id, name: string, fn: (id: string, options?: ReadRequestOptions) => Promise<T>, enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({ queryKey: computed(() => ['case', toValue(caseId), name]), queryFn: ({ signal }) => fn(toValue(caseId), { signal }), enabled });
 
 /** Lecturas por expediente. `enabled` permite no consultar pestañas a las que el rol no tiene acceso. */
 export const useReports = (caseId: Id, enabled?: MaybeRefOrGetter<boolean>) => caseQuery(caseId, 'reports', cases.listReports, enabled);
@@ -35,7 +36,7 @@ export const useUnlinkParticipant = (caseId: string) => useApiMutation((linkId: 
 
 export const useCreateInterview = (caseId: string) => useApiMutation((input: InterviewInput) => cases.createInterview(caseId, input), () => caseScope(caseId));
 export const useUpdateInterview = (caseId: string) => useApiMutation((input: InterviewInput & { id: string; expectedVersion: number }) => { const { id, ...body } = input; return cases.updateInterview(caseId, id, body); }, () => caseScope(caseId));
-export const useFinalizeInterview = (caseId: string) => useApiMutation((input: { id: string; expectedVersion: number }) => cases.finalizeInterview(caseId, input.id, input.expectedVersion), () => caseScope(caseId));
+export const useFinalizeInterview = (caseId: string) => useApiMutation((input: { id: string; expectedVersion: number; intervieweeSignature: string; interviewerSignature: string }) => cases.finalizeInterview(caseId, input.id, input), () => caseScope(caseId));
 export const useCorrectInterview = (caseId: string) => useApiMutation((input: { id: string; reason: string }) => cases.correctInterview(caseId, input.id, input.reason), () => caseScope(caseId));
 export const useDeleteInterviewDraft = (caseId: string) => useApiMutation((input: { id: string; expectedVersion: number }) => cases.deleteInterviewDraft(caseId, input.id, input.expectedVersion), () => caseScope(caseId));
 export const useVoidInterview = (caseId: string) => useApiMutation((input: { id: string; expectedVersion: number; reason: string }) => cases.voidInterview(caseId, input.id, input), () => caseScope(caseId));

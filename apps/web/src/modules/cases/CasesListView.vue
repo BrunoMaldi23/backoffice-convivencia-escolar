@@ -15,9 +15,10 @@ import { useDirectory } from '@/composables/useDirectory';
 import { useSession } from '@/composables/useSession';
 import { CATEGORY_OPTIONS, categoryLabel, formatFolio } from '@/lib/catalogs';
 import { formatDate, formatDateTime, isOverdue } from '@/lib/format';
-import { isActiveCase } from '@/lib/metrics';
+import { isCaseInManagement } from '@/lib/metrics';
 import { optionsFrom, priorityOptions } from '@/lib/status';
 import { CASE_STATUSES, type CaseRecord } from '@/types/api';
+import ArchiveCaseDialog from './ArchiveCaseDialog.vue';
 
 /**
  * Listado de expedientes. Se traen todos los autorizados (hasta 300) y la búsqueda, los filtros y el orden se aplican en el
@@ -30,6 +31,8 @@ const { nameOf } = useDirectory();
 const query = useAllCases();
 
 const search = ref('');
+const archiveTarget = ref<CaseRecord | null>(null);
+const archiveOpen = ref(false);
 const pick = (key: string) => (typeof route.query[key] === 'string' ? (route.query[key] as string) : null);
 const values = ref<Record<string, string | null>>({ status: pick('estado'), priority: pick('prioridad'), category: null, owner: null });
 
@@ -61,6 +64,8 @@ const rows = computed(() => {
   );
 });
 const rowTo = (c: CaseRecord) => ({ name: 'cases-detail', params: { id: c.id } });
+const archived = () => { archiveTarget.value = null; archiveOpen.value = false; };
+const openArchive = (record: CaseRecord) => { archiveTarget.value = record; archiveOpen.value = true; };
 </script>
 
 <template>
@@ -90,12 +95,15 @@ const rowTo = (c: CaseRecord) => ({ name: 'cases-detail', params: { id: c.id } }
             <template #cell-status="{ row }"><StatusBadge :status="row.status" /></template>
             <template #cell-responsibleUserId="{ row }"><span :class="row.responsibleUserId ? '' : 'text-slate-500'">{{ nameOf(row.responsibleUserId) }}</span></template>
             <template #cell-nextActionDueAt="{ row }">
-              <span v-if="row.nextActionDueAt" :class="['whitespace-nowrap tabular-nums', isActiveCase(row) && isOverdue(row.nextActionDueAt) ? 'font-semibold text-red-800' : 'text-slate-700']">
-                {{ formatDate(row.nextActionDueAt) }}<span v-if="isActiveCase(row) && isOverdue(row.nextActionDueAt)" class="sr-only"> (vencida)</span>
+              <span v-if="row.nextActionDueAt" :class="['whitespace-nowrap tabular-nums', isCaseInManagement(row) && isOverdue(row.nextActionDueAt) ? 'font-semibold text-red-800' : 'text-slate-700']">
+                {{ formatDate(row.nextActionDueAt) }}<span v-if="isCaseInManagement(row) && isOverdue(row.nextActionDueAt)" class="sr-only"> (vencida)</span>
               </span>
               <span v-else class="text-slate-500">—</span>
             </template>
             <template #cell-updatedAt="{ row }"><span class="whitespace-nowrap tabular-nums text-slate-700">{{ formatDateTime(row.updatedAt) }}</span></template>
+            <template #actions="{ row }">
+              <Button v-if="can('cases.archive')" severity="danger" text rounded aria-label="Archivar caso" title="Archivar caso" @click="openArchive(row)"><template #icon><AppIcon name="folder" :size="16" /></template></Button>
+            </template>
             <template #empty>
               <div class="px-6 py-10 text-center"><p class="font-semibold text-slate-900">Sin coincidencias</p><p class="mt-1 text-sm text-slate-600">Ajuste la búsqueda o limpie los filtros para ver más casos.</p></div>
             </template>
@@ -104,5 +112,6 @@ const rowTo = (c: CaseRecord) => ({ name: 'cases-detail', params: { id: c.id } }
       </QueryState>
     </section>
     <p v-if="query.data.value?.truncated" class="mt-3 text-xs text-slate-500">Se muestran los {{ query.data.value.items.length }} casos más recientes de {{ query.data.value.total }}.</p>
+    <ArchiveCaseDialog v-if="archiveTarget" v-model:visible="archiveOpen" :case-record="archiveTarget" @archived="archived" />
   </div>
 </template>

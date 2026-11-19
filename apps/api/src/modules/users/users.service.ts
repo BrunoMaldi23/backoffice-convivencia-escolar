@@ -1,20 +1,18 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../database/database.service';
-import { MailService } from '../mail/mail.service';
-import { ConfigService } from '@nestjs/config';
+import { SupabaseAuthService } from '../auth/supabase-auth.service';
 import { AuditRequestContext, SecurityAuditService } from '../../common/security/security-audit.service';
 
-const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-const userSelect = { id: true, email: true, displayName: true, isActive: true, createdAt: true, updatedAt: true, roles: { select: { role: { select: { name: true } } } } } as const;
+const userSelect = { id: true, email: true, displayName: true, isActive: true, invitationPending: true, createdAt: true, updatedAt: true, roles: { select: { role: { select: { name: true } } } } } as const;
 const present = (user: { roles: { role: { name: string } }[] } & Record<string, unknown>) => ({ ...user, roles: user.roles.map((r) => r.role.name) });
 const auditUser = (user: { email: string; displayName: string; isActive: boolean; roles: { role: { name: string } }[] }) => ({ email: user.email, displayName: user.displayName, isActive: user.isActive, roles: user.roles.map((r) => r.role.name).sort() });
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService, private readonly mail: MailService, private readonly config: ConfigService, private readonly audit: SecurityAuditService) {}
+  constructor(private readonly db: DatabaseService, private readonly supabaseAuth: SupabaseAuthService, private readonly audit: SecurityAuditService) {}
   async list(page: number, limit: number, search?: string, role?: string, active?: boolean) {
     const where: Prisma.UserWhereInput = { ...(active === undefined ? {} : { isActive: active }), ...(search ? { OR: [{ email: { contains: search, mode: 'insensitive' } }, { displayName: { contains: search, mode: 'insensitive' } }] } : {}), ...(role ? { roles: { some: { role: { name: role } } } } : {}) };
     const [items, total] = await this.db.$transaction([this.db.user.findMany({ where, select: userSelect, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } }), this.db.user.count({ where })]);
@@ -24,23 +22,22 @@ export class UsersService {
   async create(email: string, displayName: string, roleNames: string[], establishmentId: string, actorId: string, context: AuditRequestContext = {}) {
     const normalized = email.trim().toLowerCase();
     if (roleNames.includes('SYSTEM_ADMIN')) throw new ForbiddenException('No se concede SYSTEM_ADMIN al crear cuentas');
+    if (await this.db.user.findUnique({ where: { email: normalized }, select: { id: true } })) throw new ConflictException('Correo ya registrado');
     const roles = await this.resolveRoles(roleNames);
-    const token = randomBytes(32).toString('base64url');
     const unusableHash = await argon2.hash(randomBytes(32), { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
+    const authUser = await this.supabaseAuth.invite(normalized, displayName.trim());
     let user: { id: string };
     try {
       user = await this.db.$transaction(async (tx) => {
         const establishment = await tx.establishment.findFirst({ where: { id: establishmentId, isActive: true }, select: { id: true } });
         if (!establishment) throw new NotFoundException('Establecimiento no disponible');
-        const created = await tx.user.create({ data: { email: normalized, displayName: displayName.trim(), isActive: false, passwordHash: unusableHash, roles: { create: roles.map((r) => ({ roleId: r.id })) } } });
+        const created = await tx.user.create({ data: { email: normalized, displayName: displayName.trim(), isActive: false, invitationPending: true, passwordHash: unusableHash, supabaseAuthUserId: authUser.id, roles: { create: roles.map((r) => ({ roleId: r.id })) } } });
         await tx.establishmentMembership.create({ data: { establishmentId: establishment.id, userId: created.id, isActive: true } });
-        await tx.passwordResetToken.create({ data: { userId: created.id, tokenHash: digest(token), purpose: 'INVITE', expiresAt: new Date(Date.now() + this.config.getOrThrow<number>('PASSWORD_RESET_TTL_MINUTES') * 60_000) } });
         await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_CREATED', targetType: 'USER', targetId: created.id, metadata: { result: 'SUCCESS', establishmentId: establishment.id }, changes: this.audit.userChanges({}, { email: normalized, displayName: displayName.trim(), isActive: false, roles: roleNames.sort() }), context }) });
         await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'ESTABLISHMENT_MEMBERSHIP_CHANGED', targetType: 'ESTABLISHMENT_MEMBERSHIP', targetId: `${establishment.id}:${created.id}`, metadata: { isActive: true, result: 'SUCCESS' }, context }) });
         return created;
       });
-    } catch (error) { this.duplicate(error); throw error; }
-    await this.mail.sendAction(normalized, 'INVITE', token);
+    } catch (error) { if (authUser.created) await this.supabaseAuth.removeUser(authUser.id); this.duplicate(error); throw error; }
     return this.get(user.id);
   }
   async update(id: string, data: { email?: string; displayName?: string }, actorId: string, context: AuditRequestContext = {}) {
@@ -57,9 +54,9 @@ export class UsersService {
       await this.adminLock(tx);
       const user = await tx.user.findUnique({ where: { id }, include: { roles: { include: { role: true } } } });
       if (!user) throw new NotFoundException('Usuario no encontrado');
-      if (isActive && !user.isActive && await tx.passwordResetToken.count({ where: { userId: id, purpose: 'INVITE', usedAt: null } })) throw new ConflictException('La cuenta pendiente debe aceptar su invitación');
+      if (isActive && !user.isActive && user.invitationPending) throw new ConflictException('La cuenta pendiente debe aceptar su invitación');
       if (!isActive && user.isActive && user.roles.some((r) => r.role.name === 'SYSTEM_ADMIN')) await this.ensureAnotherAdmin(tx, id);
-      await tx.user.update({ where: { id }, data: { isActive } });
+      await tx.user.update({ where: { id }, data: { isActive, ...(isActive ? {} : { invitationPending: false }) } });
       if (!isActive) await tx.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
       await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: isActive ? 'USER_ACTIVATED' : 'USER_DISABLED', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' }, changes: this.audit.userChanges({ isActive: user.isActive }, { isActive }), context }) });
     });
@@ -95,16 +92,17 @@ export class UsersService {
     return { success: true };
   }
   async resendInvitation(id: string, actorId: string, context: AuditRequestContext = {}) {
-    const user = await this.db.user.findUnique({ where: { id }, select: { id: true, email: true, isActive: true } });
+    const user = await this.db.user.findUnique({ where: { id }, select: { id: true, email: true, displayName: true, isActive: true, invitationPending: true, supabaseAuthUserId: true } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
-    if (user.isActive) throw new ConflictException('La cuenta ya está activa');
-    const token = randomBytes(32).toString('base64url');
+    if (!user.invitationPending) throw new ConflictException(user.isActive ? 'La cuenta ya está activa' : 'La cuenta está desactivada y no tiene una invitación pendiente');
+    if (user.supabaseAuthUserId) await this.supabaseAuth.resetPassword(user.email);
+    else {
+      const authUser = await this.supabaseAuth.invite(user.email, user.displayName);
+      await this.db.user.update({ where: { id }, data: { supabaseAuthUserId: authUser.id } });
+    }
     await this.db.$transaction(async (tx) => {
-      await tx.passwordResetToken.updateMany({ where: { userId: id, purpose: 'INVITE', usedAt: null }, data: { usedAt: new Date() } });
-      await tx.passwordResetToken.create({ data: { userId: id, purpose: 'INVITE', tokenHash: digest(token), expiresAt: new Date(Date.now() + this.config.getOrThrow<number>('PASSWORD_RESET_TTL_MINUTES') * 60_000) } });
       await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'USER_INVITATION_SENT', targetType: 'USER', targetId: id, metadata: { result: 'SUCCESS' }, context }) });
     });
-    await this.mail.sendAction(user.email, 'INVITE', token);
     return { success: true };
   }
   private async resolveRoles(names: string[]) {

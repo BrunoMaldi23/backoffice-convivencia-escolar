@@ -30,7 +30,6 @@ export const NAVIGATION: NavGroup[] = [
   {
     label: 'Gestión',
     items: [
-      { label: 'Tareas', to: '/tareas', icon: 'check-square', permission: 'tasks.read' },
       { label: 'Entrevistas', to: '/entrevistas', icon: 'message', permission: 'interviews.read' },
       { label: 'Citaciones', to: '/citaciones', icon: 'mail', permission: 'summons.read' },
       { label: 'Calendario', to: '/calendario', icon: 'calendar', permission: 'cases.read' },

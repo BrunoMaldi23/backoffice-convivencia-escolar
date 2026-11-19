@@ -10,6 +10,7 @@ import LoadingState from '@/components/LoadingState.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ScopeNotice from '@/components/ScopeNotice.vue';
 import { useAllCases } from '@/composables/useCases';
+import { useSummonsList } from '@/composables/useCaseActions';
 import { useScopedFollowUps, useScopedMeasures, useScopedTasks } from '@/composables/useScoped';
 import { useSession } from '@/composables/useSession';
 import { formatFolio } from '@/lib/catalogs';
@@ -17,8 +18,7 @@ import { formatDateTime, formatTime } from '@/lib/format';
 import { collectDeadlines, type Deadline, type DeadlineKind } from '@/lib/metrics';
 
 /**
- * Calendario de plazos. La API no tiene agenda ni eventos: se muestran los plazos reales de tareas y medidas pendientes, la próxima
- * acción de cada expediente abierto y la de los seguimientos. Cada plazo abre su expediente. Mes, semana y agenda móvil.
+ * Calendario de plazos y citaciones programadas. Cada elemento proviene de lecturas globales autorizadas y abre su expediente.
  */
 const { can } = useSession();
 const cases = useAllCases();
@@ -33,16 +33,11 @@ const KIND: Record<DeadlineKind, { label: string; cls: string }> = {
   'next-action': { label: 'Próxima acción del expediente', cls: 'border-l-sky-600 bg-sky-50 text-sky-900' },
   task: { label: 'Tarea', cls: 'border-l-slate-500 bg-slate-100 text-slate-800' },
   measure: { label: 'Medida de resguardo', cls: 'border-l-amber-500 bg-amber-50 text-amber-900' },
-  'follow-up': { label: 'Próxima acción de seguimiento', cls: 'border-l-emerald-600 bg-emerald-50 text-emerald-900' }
+  'follow-up': { label: 'Próxima acción de seguimiento', cls: 'border-l-emerald-600 bg-emerald-50 text-emerald-900' },
+  summons: { label: 'Citación programada', cls: 'border-l-violet-600 bg-violet-50 text-violet-900' }
 };
 const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-const deadlines = computed(() => collectDeadlines({
-  cases: cases.data.value?.items ?? [],
-  tasks: (tasks.data.value?.rows ?? []).map((r) => ({ caseId: r.case.id, item: r.item })),
-  measures: (measures.data.value?.rows ?? []).map((r) => ({ caseId: r.case.id, item: r.item })),
-  followUps: (followUps.data.value?.rows ?? []).map((r) => ({ caseId: r.case.id, item: r.item }))
-}));
 const folioOf = (id: string) => { const c = cases.data.value?.items.find((x) => x.id === id); return c ? formatFolio(c.folio) : 'Expediente'; };
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -53,6 +48,20 @@ const days = computed(() => {
   const start = startOfWeek(new Date(cursor.value.getFullYear(), cursor.value.getMonth(), 1));
   return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 });
+const summonsRange = computed(() => {
+  const visible = days.value;
+  const from = new Date(visible[0]!); from.setHours(0, 0, 0, 0);
+  const to = new Date(visible[visible.length - 1]!); to.setHours(23, 59, 59, 999);
+  return { page: 1, limit: 100, status: 'PROGRAMADA' as const, from: from.toISOString(), to: to.toISOString() };
+});
+const summons = useSummonsList(summonsRange, () => can('summons.read'));
+const deadlines = computed(() => collectDeadlines({
+  cases: cases.data.value?.items ?? [],
+  tasks: (tasks.data.value?.rows ?? []).map((r) => ({ caseId: r.case.id, item: r.item })),
+  measures: (measures.data.value?.rows ?? []).map((r) => ({ caseId: r.case.id, item: r.item })),
+  followUps: (followUps.data.value?.rows ?? []).map((r) => ({ caseId: r.case.id, item: r.item })),
+  summons: (summons.data.value?.items ?? []).map((item) => ({ caseId: item.caseId, item }))
+}));
 const byDay = computed(() => {
   const map = new Map<string, Deadline[]>();
   for (const d of deadlines.value) { const key = dayKey(new Date(d.at)); map.set(key, [...(map.get(key) ?? []), d]); }
@@ -66,13 +75,14 @@ const title = computed(() => {
 const todayKey = dayKey(new Date());
 function move(step: number) { const d = new Date(cursor.value); if (view.value === 'month') d.setMonth(d.getMonth() + step, 1); else d.setDate(d.getDate() + step * 7); cursor.value = d; }
 const dayLabel = (d: Date) => new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
-const pending = computed(() => cases.isPending.value);
+const pending = computed(() => cases.isPending.value || summons.isPending.value);
+const calendarError = computed(() => cases.error.value ?? summons.error.value);
 const dialog = computed({ get: () => Boolean(selected.value), set: (v: boolean) => { if (!v) selected.value = null; } });
 </script>
 
 <template>
   <div>
-    <PageHeader title="Calendario" description="Plazos de tareas, medidas y próximas acciones de los expedientes a los que usted tiene acceso.">
+    <PageHeader title="Calendario" description="Plazos y citaciones programadas de los expedientes a los que usted tiene acceso.">
       <template #actions><SelectButton v-model="view" :options="[{ label: 'Mes', value: 'month' }, { label: 'Semana', value: 'week' }]" option-label="label" option-value="value" :allow-empty="false" aria-label="Vista del calendario" /></template>
     </PageHeader>
     <ScopeNotice v-if="tasks.data.value" :result="tasks.data.value" noun="Plazos de tareas y medidas" />
@@ -88,7 +98,7 @@ const dialog = computed({ get: () => Boolean(selected.value), set: (v: boolean) 
       </header>
 
       <LoadingState v-if="pending" :rows="6" />
-      <ErrorState v-else-if="cases.error.value" :error="cases.error.value" subject="el calendario" @retry="cases.refetch()" />
+      <ErrorState v-else-if="calendarError" :error="calendarError" subject="el calendario" @retry="() => { cases.refetch(); summons.refetch(); }" />
       <template v-else>
         <div v-if="view === 'month'" class="hidden md:block">
           <div class="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600"><div v-for="d in WEEKDAYS" :key="d" class="px-2 py-2">{{ d }}</div></div>
@@ -118,7 +128,7 @@ const dialog = computed({ get: () => Boolean(selected.value), set: (v: boolean) 
             </li>
           </template>
         </ol>
-        <p v-if="!deadlines.length" class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-600">No hay plazos con fecha en los expedientes revisados.</p>
+        <p v-if="!deadlines.length" class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-600">No hay plazos ni citaciones en este período.</p>
       </template>
 
       <footer class="flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-200 px-4 py-3 text-xs text-slate-600">

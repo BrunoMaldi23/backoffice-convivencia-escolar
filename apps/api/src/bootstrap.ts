@@ -23,13 +23,15 @@ export async function createApplication() {
   const config = app.get(ConfigService);
   const trustProxyHops = config.getOrThrow<number>('TRUST_PROXY_HOPS');
   if (trustProxyHops > 0) (app.getHttpAdapter().getInstance() as { set(name: string, value: number): void }).set('trust proxy', trustProxyHops);
-  app.use('/api/cases/:caseId/documents', json({ limit: '15mb' }));
-  app.use(json({ limit: '100kb' }), urlencoded({ extended: true, limit: '100kb' }));
+  // La carga de directorio incluye estudiante y hasta tres contactos por fila; 512 KB permite lotes controlados sin abrir cuerpos ilimitados.
+  app.use(json({ limit: '512kb' }), urlencoded({ extended: true, limit: '512kb' }));
   app.use(cookieParser());
   app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' }));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
   app.enableCors({ origin: [config.getOrThrow<string>('WEB_ORIGIN')], methods: ['GET', 'POST', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], credentials: true, allowedHeaders: ['Content-Type', 'X-CSRF-Token'] });
-  const document = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle('Backoffice Convivencia Escolar').setVersion('1.0.0').addCookieAuth().build());
-  if (process.env.NODE_ENV !== 'production') SwaggerModule.setup('api/docs', app, document);
+  if (process.env.NODE_ENV !== 'production') {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle('Backoffice Convivencia Escolar').setVersion('1.0.0').addCookieAuth().build());
+    SwaggerModule.setup('api/docs', app, document);
+  }
   return app;
 }

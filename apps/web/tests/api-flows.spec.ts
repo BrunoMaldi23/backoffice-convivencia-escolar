@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { scanCases } from '../src/composables/useScoped';
 import { fetchAllCases } from '../src/composables/useCases';
 import { describeError, httpStatus, isConflict } from '../src/lib/errors';
 import { createFakeApi, type FakeApiOptions } from '../src/preview/fakeApi';
@@ -36,8 +35,9 @@ describe('expedientes', () => {
 
   it('crea un expediente con folio correlativo y versión 1', async () => {
     const establishmentId = fake.db.establishments[0]!.id;
-    const a = await cases.createCase({ establishmentId, title: 'Caso A', receivedAt: new Date().toISOString(), categoryCode: 'CONVIVENCIA', priority: 'MEDIA' });
-    const b = await cases.createCase({ establishmentId, title: 'Caso B', receivedAt: new Date().toISOString(), categoryCode: 'CONVIVENCIA', priority: 'ALTA' });
+    const protocolVersionId = fake.db.protocols[0]!.versions[0]!.id;
+    const a = await cases.createCase({ establishmentId, protocolVersionId, title: 'Caso A', receivedAt: new Date().toISOString(), categoryCode: 'CONVIVENCIA', priority: 'MEDIA' });
+    const b = await cases.createCase({ establishmentId, protocolVersionId, title: 'Caso B', receivedAt: new Date().toISOString(), categoryCode: 'CONVIVENCIA', priority: 'ALTA' });
     expect(a.version).toBe(1);
     expect(b.folio).toBe(a.folio + 1);
     expect(a.status).toBe('ABIERTO');
@@ -150,7 +150,7 @@ describe('contenido del expediente', () => {
 
   it('un protocolo nuevo nace como borrador, no se lista y se publica con el identificador devuelto', async () => {
     const record = caseWith('ABIERTO');
-    const created = await ops.createProtocol({ establishmentId: record.establishmentId, code: 'nuevo', name: 'Protocolo nuevo', title: 'Versión 1', content: { etapas: ['A', 'B'] } });
+    const created = await ops.createProtocol({ establishmentId: record.establishmentId, code: 'nuevo', name: 'Protocolo nuevo', categoryCodes: [], title: 'Versión 1', content: { etapas: ['A', 'B'] } });
     expect(created.versions[0]).toMatchObject({ status: 'BORRADOR', content: { etapas: ['A', 'B'] } });
     expect((await ops.listProtocols(record.establishmentId)).some((p) => p.id === created.id && p.versions.length)).toBe(false);
     await ops.publishProtocolVersion(created.versions[0]!.id, record.establishmentId);
@@ -236,23 +236,22 @@ describe('administración de usuarios', () => {
 });
 
 describe('vistas globales', () => {
-  it('reúne el contenido de los expedientes abiertos y avisa la base de los datos', async () => {
+  it('consulta una vez los datos globales autorizados, sin escanear cada expediente', async () => {
     const all = await fetchAllCases();
     expect(all).toMatchObject({ total: 14, truncated: false });
-    const result = await scanCases(all, ops.listTasks);
+    const result = await ops.listGlobalTasks();
     expect(result.rows.length).toBe(fake.db.tasks.filter((t) => fake.db.cases.some((c) => c.id === t.caseId && c.status !== 'CERRADO')).length);
     expect(result.scanned).toBe(result.eligible);
     expect(result.rows.every((row) => row.case.id === row.item.caseId)).toBe(true);
-    const withClosed = await scanCases(all, ops.listTasks, { includeClosed: true });
+    const withClosed = await ops.listGlobalTasks(true);
     expect(withClosed.eligible).toBe(14);
   });
 
   it('propaga un 403 de permisos en lugar de mostrar datos vacíos', async () => {
     boot({ roles: ['CONVIVENCIA'] });
     fake.db.me.roles = ['CONVIVENCIA'];
-    const all = await fetchAllCases();
     fake.db.me.roles = ['INSPECTOR_GENERAL'];
-    expect(httpStatus(await rejection(scanCases(all, ops.listTasks)))).toBe(403);
+    expect(httpStatus(await rejection(ops.listGlobalTasks()))).toBe(403);
   });
 
   it('marca notificaciones como leídas con confirmación del servidor', async () => {

@@ -10,6 +10,7 @@ import { CasesService } from './cases.service';
 const auditContext = (req: AdminRequest) => ({ ipAddress: req.ip, userAgent: req.get('user-agent') });
 class CreateCaseDto {
   @ApiProperty() @IsUUID() establishmentId!: string;
+  @ApiProperty({ description: 'Versión publicada del protocolo que origina el expediente.' }) @IsUUID() protocolVersionId!: string;
   @ApiProperty() @IsString() @MinLength(3) @MaxLength(180) title!: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(4000) initialDescription?: string;
   @ApiProperty() @IsDateString() receivedAt!: string;
@@ -32,6 +33,7 @@ class UpdateCaseDto {
 }
 class AssignCaseDto { @ApiProperty() @IsUUID() responsibleUserId!: string; @ApiProperty() @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number; @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) reason?: string; }
 class TransitionCaseDto { @ApiProperty({ enum: CaseStatus }) @IsEnum(CaseStatus) toStatus!: CaseStatus; @ApiProperty() @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number; @ApiPropertyOptional() @IsOptional() @IsUUID() stageId?: string; @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(1000) reason?: string; }
+class ArchiveCaseDto { @ApiProperty() @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number; @ApiProperty() @IsString() @MinLength(3) @MaxLength(1000) reason!: string; }
 class ListCasesDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() establishmentId?: string;
   @ApiPropertyOptional({ enum: CaseStatus }) @IsOptional() @IsEnum(CaseStatus) status?: CaseStatus;
@@ -61,6 +63,8 @@ export class CasesController {
   assign(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignCaseDto) { return this.cases.assign(req.actorId!, id, dto, auditContext(req)); }
   @Post(':id/transition') @RequirePermissions('cases.transition') @ApiBadRequestResponse({ description: 'Transición o motivo inválido' }) @ApiConflictResponse({ description: 'Versión obsoleta' })
   transition(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: TransitionCaseDto) { return this.cases.transition(req.actorId!, id, dto, auditContext(req)); }
+  @Post(':id/archive') @RequirePermissions('cases.archive') @ApiOperation({ summary: 'Archiva un expediente', description: 'Lo retira de los listados operativos sin borrar sus antecedentes.' }) @ApiConflictResponse({ description: 'Versión obsoleta o expediente ya archivado' })
+  archive(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ArchiveCaseDto) { return this.cases.archive(req.actorId!, id, dto.expectedVersion, dto.reason, auditContext(req)); }
   @Get(':id/timeline') @RequirePermissions('cases.timeline.read') @ApiOperation({ summary: 'Consulta línea de tiempo inmutable' })
   timeline(@Req() req: AdminRequest, @Param('id', ParseUUIDPipe) id: string, @Query() q: PageDto) { return this.cases.timeline(req.actorId!, id, q.page, q.limit, q.mode); }
 }

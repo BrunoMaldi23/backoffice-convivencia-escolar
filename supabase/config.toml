@@ -119,6 +119,13 @@ enabled = true
 file_size_limit = "50MiB"
 
 # Uncomment to configure local storage buckets
+# Bucket privado para documentos y evidencias del expediente. En producción se
+# crea con la misma configuración en el proyecto Supabase hospedado.
+[storage.buckets.case-documents]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["application/pdf", "image/jpeg", "image/png"]
+
 # [storage.buckets.images]
 # public = false
 # file_size_limit = "50MiB"

@@ -27,7 +27,10 @@ const permissions = usePermissions();
 const view = ref<'roles' | 'matrix'>('roles');
 const selectedName = computed<string | null>({ get: () => (typeof route.query.rol === 'string' ? route.query.rol : null), set: (v) => { void router.replace({ query: { ...route.query, rol: v ?? undefined } }); } });
 const selected = computed(() => roles.data.value?.find((r) => r.name === selectedName.value) ?? null);
-const holders = useUserList(() => ({ page: 1, limit: 50, role: selected.value?.name }));
+const holders = useUserList(
+  () => ({ page: 1, limit: 50, role: selected.value?.name }),
+  () => Boolean(selected.value) && can('users.read')
+);
 const groups = computed(() => {
   const unknown = (permissions.data.value ?? []).filter((p) => !isKnownPermission(p.code)).map((p) => ({ code: p.code, label: p.description || p.code }));
   return unknown.length ? [...PERMISSION_GROUPS, { area: 'Otros', permissions: unknown }] : PERMISSION_GROUPS;

@@ -57,7 +57,7 @@ export function describeError(error: unknown, fallback = 'No fue posible complet
     if (status === 404) return 'El registro no está disponible: no existe o no tiene acceso a él.';
     if (status === 409) return server ? `${server}. Recargue el registro para ver los cambios y reintente.` : 'El registro cambió mientras lo editaba. Recargue para ver los cambios y reintente.';
     if (status === 413) return 'El servidor rechazó el archivo por su tamaño. Pruebe con uno más liviano o consulte a la administración del sistema.';
-    if (status === 429) return 'Se realizaron demasiados intentos. Espere un minuto e intente nuevamente.';
+    if (status === 429) return server ?? 'Se realizaron demasiados intentos. Espere antes de intentar nuevamente.';
     if (status >= 500) return 'El servidor tuvo un problema. Intente nuevamente en unos minutos.';
   }
   return fallback;

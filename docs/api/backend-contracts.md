@@ -7,7 +7,7 @@ Base local: `http://localhost:3000/api`. JSON UTF-8, UUID v4 e ISO-8601. Salvo `
 | Método | Ruta | Entrada | Éxito | Errores |
 |---|---|---|---|---|
 | POST | `/auth/login` | `{email,password}` | 201, `{user}` y cookies | 400, 401, 429 |
-| GET | `/auth/me` | — | 200 `{user:{id,email,displayName,roles}}` | 401 |
+| GET | `/auth/me` | — | 200 `{user:{id,email,displayName,roles,permissions}}` | 401 |
 | GET | `/auth/csrf` | — | 200 `{token}` | 401 |
 | POST | `/auth/logout` | header CSRF | 201 `{success:true}` | 401,403 |
 | POST | `/auth/forgot-password` | `{email}` | 201 genérico | 400,429 |
@@ -58,18 +58,20 @@ Todo expediente exige membresía activa y creador, responsable o grant vigente; 
 | GET/POST `/cases/:caseId/participants` | `participants.read`/`participants.manage` | POST `{participantId,participationCode}` |
 | PATCH `/cases/:caseId/participants/:linkId` | `participants.manage` | `{expectedVersion,participationCode}` |
 | POST `/cases/:caseId/participants/:linkId/unlink` | `participants.manage` | — |
-| GET/POST `/cases/:caseId/interviews` | `interviews.read`/`interviews.create` | POST `{occurredAt,modalityCode,summary,restrictedNotes?,agreements?}` |
+| GET/POST `/cases/:caseId/interviews` | `interviews.read`/`interviews.create` | POST `{occurredAt,modalityCode,studentName?,guardianName?,courseName?,requestedBy?,reasonCategories?,interviewReason?,summary,restrictedNotes?,agreements?}` |
 | PATCH `/cases/:caseId/interviews/:id` | `interviews.update` | anterior más `expectedVersion` |
-| POST `.../:id/finalize` / `.../:id/correct` | `interviews.finalize` / `interviews.correct` | `{expectedVersion}` / `{reason}` |
+| POST `.../:id/finalize` / `.../:id/correct` | `interviews.finalize` / `interviews.correct` | `{expectedVersion,intervieweeSignature,interviewerSignature}` / `{reason}` |
 | POST `/cases/:caseId/interviews/:id/void` | `interviews.correct` | `{expectedVersion,reason}` |
 
-Entrevistas finalizadas requieren corrección antes de editar. Todas estas rutas usan autorización contextual y CSRF en mutaciones.
+Las entrevistas nuevas se finalizan sólo con ambas firmas manuscritas capturadas en pantalla. Al finalizar, la API genera y guarda el PDF privado asociado al registro; ese respaldo no puede anularse ni eliminarse. Entrevistas finalizadas requieren corrección antes de editar. Todas estas rutas usan autorización contextual y CSRF en mutaciones.
 
 ## Operación de expediente
 
 | Método/ruta | Permiso | Entrada |
 |---|---|---|
-| GET/POST `/cases/:caseId/documents` | `documents.read`/`documents.create` | Documento: `{kind:"DOCUMENTO",originalFilename,contentType,base64Content}`; evidencia audiovisual: `{kind:"EVIDENCIA",originalFilename,externalUrl}` de OneDrive/SharePoint |
+| GET/POST `/cases/:caseId/documents` | `documents.read`/`documents.create` | GET lista; POST sólo registra evidencia audiovisual `{kind:"EVIDENCIA",originalFilename,externalUrl}` de OneDrive/SharePoint |
+| POST `/cases/:caseId/documents/uploads` | `documents.create` | Inicia carga privada: `{originalFilename,contentType,sizeBytes}`; devuelve URL firmada, `uploadId` y expiración |
+| POST `/cases/:caseId/documents/uploads/:uploadId/complete`; DELETE `/cases/:caseId/documents/uploads/:uploadId` | `documents.create` | POST confirma y valida el objeto cargado; DELETE cancela la carga pendiente |
 | GET `/cases/:caseId/documents/:id/download` | `documents.read` | binario autorizado |
 | POST `/cases/:caseId/documents/:id/void` | `documents.create` | `{expectedVersion,reason}` |
 | GET `/protocols/:establishmentId`, POST `/protocols` | `protocols.read`/`protocols.manage` | POST `{establishmentId,code,name,title,content}` donde `content` es JSON serializado |
@@ -84,6 +86,7 @@ Entrevistas finalizadas requieren corrección antes de editar. Todas estas rutas
 | GET/POST `/cases/:caseId/tasks` | `tasks.read`/`tasks.manage` | `{title,dueAt?,assignedToUserId?}` |
 | POST `/cases/:caseId/tasks/:id/update` | `tasks.manage` | `{expectedVersion,title?,dueAt?,assignedToUserId?,status?:"CANCELADA"}` |
 | POST `/cases/:caseId/tasks/:id/complete` | `tasks.manage` | — |
+| GET `/work-items/documents`, `/work-items/measures`, `/work-items/follow-ups`, `/work-items/tasks`, `/work-items/interviews`, `/work-items/reports` | Permiso de lectura correspondiente | Listado global autorizado. Acepta `includeClosed=true`; devuelve hasta 500 filas con `{rows:[{case,item}],scanned,eligible,totalCases,truncated}` sin recorrer un endpoint por expediente. Si `truncated` es `true`, la vista debe pedir filtros más específicos o abrir el expediente correspondiente. |
 | GET `/notifications`; POST `/notifications/:id/read` | `notifications.read` | — |
 
 ### Anular, cancelar, revocar y eliminar registros del expediente
@@ -104,4 +107,4 @@ Hay dos acciones distintas y la interfaz las separa con íconos diferentes:
 
 Todas exigen un expediente abierto y la versión vigente (409 si cambió o si ya no corresponde eliminar). Las medidas, citaciones y derivaciones no se eliminan: se cancelan o se cierran con su estado.
 
-Los documentos aceptan sólo PDF, JPEG y PNG, máximo 10 MiB, con firma binaria y SHA-256. La evidencia audiovisual guarda un enlace HTTPS de OneDrive o SharePoint, no el video: el enlace se entrega sólo a quien tiene acceso contextual al expediente, no se incluye en auditoría y se abre desde la interfaz. Las anulaciones son lógicas: requieren versión y motivo, dejan de mostrarse y conservan su evento y auditoría. Descarga, listados y operaciones dependen del alcance contextual. Las mutaciones devuelven 201 salvo PATCH (200); 400 validación, 401, 403, 404 sin alcance, 409 concurrencia/estado y 500 sólo ante falla interna de almacenamiento.
+Los documentos aceptan sólo PDF, JPEG y PNG, máximo 10 MiB, con firma binaria y SHA-256. La API autoriza la carga y emite una URL firmada de corta duración para el bucket privado; al confirmarla, vuelve a descargar y valida el contenido antes de crear el registro. La clave de servicio de Supabase no se entrega al navegador. La evidencia audiovisual guarda un enlace HTTPS de OneDrive o SharePoint, no el video: el enlace se entrega sólo a quien tiene acceso contextual al expediente, no se incluye en auditoría y se abre desde la interfaz. Las anulaciones son lógicas: requieren versión y motivo, dejan de mostrarse y conservan su evento y auditoría. Descarga, listados y operaciones dependen del alcance contextual. Las mutaciones devuelven 201 salvo PATCH (200); 400 validación, 401, 403, 404 sin alcance, 409 concurrencia/estado, 503 si Storage no está configurado y 500 sólo ante falla interna de almacenamiento.

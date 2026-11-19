@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
@@ -55,6 +55,7 @@ const voidReason = ref('');
 const voidError = ref<string | null>(null);
 const KINDS = [{ value: 'DOCUMENTO', label: 'Documento' }, { value: 'EVIDENCIA', label: 'Evidencia' }];
 const isVideoEvidence = computed(() => form.kind === 'EVIDENCIA');
+watch(() => form.kind, () => { fileError.value = null; localError.value = null; });
 
 function openForm() { Object.assign(form, { kind: 'DOCUMENTO', file: null, title: '', externalUrl: '' }); fileError.value = null; localError.value = null; upload.reset(); linkVideo.reset(); open.value = true; }
 function onFile(event: Event) {

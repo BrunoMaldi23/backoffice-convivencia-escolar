@@ -9,14 +9,14 @@ import { useDirectory } from '@/composables/useDirectory';
 import { useSession } from '@/composables/useSession';
 import { categoryLabel, formatFolio } from '@/lib/catalogs';
 import { formatDate, formatDateTime, isOverdue } from '@/lib/format';
-import { isActiveCase } from '@/lib/metrics';
+import { isCaseInManagement } from '@/lib/metrics';
 import type { CaseRecord } from '@/types/api';
 
 const props = defineProps<{ caseRecord: CaseRecord }>();
 const { user } = useSession();
 const { nameOf } = useDirectory();
 const c = computed(() => props.caseRecord);
-const overdue = computed(() => isActiveCase(c.value) && isOverdue(c.value.nextActionDueAt));
+const overdue = computed(() => isCaseInManagement(c.value) && isOverdue(c.value.nextActionDueAt));
 /** Solo quien creó el caso, es responsable o tiene un acceso de escritura puede registrar cambios; el servidor lo verifica. */
 const maybeReadOnly = computed(() => user.value && c.value.createdByUserId !== user.value.id && c.value.responsibleUserId !== user.value.id);
 </script>
@@ -29,7 +29,7 @@ const maybeReadOnly = computed(() => user.value && c.value.createdByUserId !== u
         { key: 'status', label: 'Estado' }, { key: 'priority', label: 'Prioridad' },
         { key: 'owner', label: 'Responsable', value: nameOf(c.responsibleUserId) }, { key: 'creator', label: 'Creado por', value: nameOf(c.createdByUserId, 'Persona no disponible') },
         { key: 'received', label: 'Fecha de recepción', value: formatDate(c.receivedAt) }, { key: 'updated', label: 'Última actualización', value: formatDateTime(c.updatedAt) },
-        ...(c.currentStageId ? [{ key: 'stage', label: 'Etapa', value: 'Etapa asignada (su nombre no está disponible en la API)' }] : []),
+        ...(c.currentStage ? [{ key: 'stage', label: 'Etapa', value: c.currentStage.name }] : []),
         { key: 'description', label: 'Descripción inicial', value: c.initialDescription || 'Sin descripción', wide: true }
       ]">
         <template #item-status><StatusBadge :status="c.status" /></template>

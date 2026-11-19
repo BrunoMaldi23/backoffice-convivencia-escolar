@@ -6,4 +6,4 @@ import { InstitutionsModule } from '../institutions/institutions.module';
 import { CaseOperationsController } from './case-operations.controller';
 import { CaseOperationsService } from './case-operations.service';
 import { PrivateStorageService } from './private-storage.service';
-@Module({ imports: [DatabaseModule, AdminSecurityModule, SecurityAuditModule, InstitutionsModule], controllers: [CaseOperationsController], providers: [CaseOperationsService, PrivateStorageService] }) export class CaseOperationsModule {}
+@Module({ imports: [DatabaseModule, AdminSecurityModule, SecurityAuditModule, InstitutionsModule], controllers: [CaseOperationsController], providers: [CaseOperationsService, PrivateStorageService], exports: [PrivateStorageService] }) export class CaseOperationsModule {}

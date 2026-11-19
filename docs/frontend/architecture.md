@@ -46,7 +46,7 @@ Contratos: [auth-contract](../api/auth-contract.md), [password-recovery-contract
 - **Ingreso**: `POST /auth/login` y luego `GET /auth/me`; si `/auth/me` responde 401, se informa que la sesión no quedó establecida (por ejemplo, cookies bloqueadas).
 - **Persistencia tras recargar**: la guardia consulta `GET /auth/me` (`ensureSession`) y reutiliza el resultado en memoria. Un 401 es "sin sesión"; un fallo del servidor lleva a `/login?motivo=servidor`.
 - **Rutas**: las privadas exigen sesión y redirigen a `/login?redirect=<ruta>`; quien ya tiene sesión que entra a `/login` vuelve al panel. `lib/redirect.ts` solo acepta destinos internos.
-- **Permisos**: `/auth/me` solo entrega roles. El menú y los botones usan `lib/access.ts` (matriz inicial del seed) como indicio; el servidor decide con 403 y la interfaz lo muestra como "Acceso denegado".
+- **Permisos**: `/auth/me` entrega los roles y `permissions`, la unión efectiva calculada por el servidor. El menú y los botones usan `permissions`; el servidor sigue siendo la autoridad y un 403 se muestra como "Acceso denegado".
 - **Sesión caducada o revocada**: cualquier llamada autenticada que responda 401 limpia por completo el estado en memoria y lleva a `/sesion-expirada`.
 - **Cierre de sesión**: `POST /auth/logout` con CSRF y limpieza total de la caché local.
 - **Recuperación**: el código recibido por correo se pega en el formulario y viaja en el cuerpo del `POST`, nunca en la URL.

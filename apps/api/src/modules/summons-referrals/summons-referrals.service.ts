@@ -5,6 +5,8 @@ import { pageArgs, PageQueryDto } from '../../common/pagination';
 import { AuditRequestContext, SecurityAuditService } from '../../common/security/security-audit.service';
 import { DatabaseService } from '../../database/database.service';
 import { InstitutionsService } from '../institutions/institutions.service';
+import { MailService } from '../mail/mail.service';
+import { SummonsPdfService } from './summons-pdf.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -23,7 +25,7 @@ const caseSummary = { select: { id: true, folio: true, title: true, status: true
 
 @Injectable()
 export class SummonsReferralsService {
-  constructor(private readonly db: DatabaseService, private readonly institutions: InstitutionsService, private readonly audit: SecurityAuditService) {}
+  constructor(private readonly db: DatabaseService, private readonly institutions: InstitutionsService, private readonly audit: SecurityAuditService, private readonly mail: MailService, private readonly pdf: SummonsPdfService) {}
 
   // ---- Citaciones ----
   async listCaseSummons(actor: string, caseId: string) {
@@ -68,6 +70,25 @@ export class SummonsReferralsService {
       await this.event(tx, caseId, actor, CaseEventType.SUMMONS_UPDATED, 'CASE_SUMMONS', id);
       await this.record(tx, actor, 'SUMMONS_UPDATED', 'CASE_SUMMONS', id, { caseId, status: data.status ?? current.status }, ctx);
       return tx.caseSummons.findUniqueOrThrow({ where: { id } });
+    });
+  }
+  async summonsLetter(actor: string, caseId: string, id: string) {
+    const summons = await this.summonsForLetter(actor, caseId, id, false);
+    return this.pdf.create(this.letterInput(summons));
+  }
+  async sendSummonsEmail(actor: string, caseId: string, id: string, data: { expectedVersion: number; recipientEmail: string }, ctx: AuditRequestContext) {
+    const summons = await this.summonsForLetter(actor, caseId, id, true);
+    if (summons.version !== data.expectedVersion) throw new ConflictException('La citación fue modificada por otra persona. Recargue los datos antes de enviarla.');
+    if (summons.status !== SummonsStatus.PROGRAMADA) throw new ConflictException('Solo se puede enviar una citación programada');
+    const filename = `citacion-exp-${String(summons.case.folio).padStart(4, '0')}.pdf`;
+    await this.mail.sendSummons(data.recipientEmail.trim().toLowerCase(), { recipientLabel: summons.recipientLabel, scheduledAt: summons.scheduledAt, location: summons.location, attachment: await this.pdf.create(this.letterInput(summons)), filename });
+    return this.db.$transaction(async (tx) => {
+      const changed = await tx.caseSummons.updateMany({ where: { id, caseId, version: data.expectedVersion, status: SummonsStatus.PROGRAMADA }, data: { emailSentAt: new Date(), version: { increment: 1 } } });
+      if (!changed.count) throw new ConflictException('La citación fue modificada mientras se enviaba el correo. Recargue los datos antes de reenviarla.');
+      const updated = await tx.caseSummons.findUniqueOrThrow({ where: { id } });
+      await this.event(tx, caseId, actor, CaseEventType.SUMMONS_EMAIL_SENT, 'CASE_SUMMONS', id);
+      await this.record(tx, actor, 'SUMMONS_EMAIL_SENT', 'CASE_SUMMONS', id, { caseId }, ctx);
+      return updated;
     });
   }
 
@@ -115,6 +136,15 @@ export class SummonsReferralsService {
     const record = await this.institutions.requireCaseAccess(actor, caseId, true, tx);
     if (record.status === CaseStatus.CERRADO) throw new ConflictException('El expediente está cerrado y debe reabrirse antes de registrar acciones');
     return record;
+  }
+  private async summonsForLetter(actor: string, caseId: string, id: string, requireWrite: boolean) {
+    await this.institutions.requireCaseAccess(actor, caseId, requireWrite);
+    const summons = await this.db.caseSummons.findFirst({ where: { id, caseId }, include: { case: { include: { establishment: { select: { name: true } } } } } });
+    if (!summons) throw new NotFoundException('Citación no disponible');
+    return summons;
+  }
+  private letterInput(summons: Awaited<ReturnType<SummonsReferralsService['summonsForLetter']>>) {
+    return { establishmentName: summons.case.establishment.name, recipientLabel: summons.recipientLabel, scheduledAt: summons.scheduledAt, location: summons.location, reason: summons.reason, folio: summons.case.folio };
   }
   private event(tx: Tx, caseId: string, actor: string, type: CaseEventType, entityType: string, entityId: string) {
     return tx.caseEvent.create({ data: { caseId, actorUserId: actor, eventType: type, correlationId: randomUUID(), relatedEntityType: entityType, relatedEntityId: entityId } });

@@ -54,7 +54,7 @@ export function seedFakeDb(): FakeDb {
   const establishmentId = '10000000-0000-4000-8000-000000000001';
   const person = (n: number, roles: string[], active = true): AdminUser => ({
     id: n === 1 ? PREVIEW_ME_ID : `00000000-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`, email: `persona${n}@demo.invalid`,
-    displayName: n === 1 ? 'Usuario de previsualización' : `Persona demo ${String(n).padStart(2, '0')}`, isActive: active, createdAt: ago(60 - n), updatedAt: ago(10), roles
+    displayName: n === 1 ? 'Usuario de previsualización' : `Persona demo ${String(n).padStart(2, '0')}`, isActive: active, invitationPending: !active && n === 5, createdAt: ago(60 - n), updatedAt: ago(10), roles
   });
   const users = [person(1, ['SYSTEM_ADMIN', 'CONVIVENCIA']), person(2, ['CONVIVENCIA']), person(3, ['PSICOLOGO']), person(4, ['DIRECTOR']), person(5, ['INSPECTOR_GENERAL'], false), person(6, ['TRABAJADOR_SOCIAL'], false)];
   const roles: Role[] = Object.entries(ROLE_PERMISSION_HINTS).map(([name, permissions], index) => ({ id: `20000000-0000-4000-8000-0000000000${String(index + 1).padStart(2, '0')}`, name, description: name, permissions: [...permissions] }));
@@ -93,7 +93,7 @@ export function seedFakeDb(): FakeDb {
 
   const versionId = '60000000-0000-4000-8000-000000000001';
   const protocols: ProtocolTemplate[] = [{
-    id: '60000000-0000-4000-8000-0000000000a1', establishmentId, code: 'ACTUACION-BASE', name: 'Protocolo de actuación base (sintético)', isActive: true, createdAt: ago(80), updatedAt: ago(80),
+    id: '60000000-0000-4000-8000-0000000000a1', establishmentId, code: 'ACTUACION-BASE', name: 'Protocolo de actuación base (sintético)', categoryCodes: [], isActive: true, createdAt: ago(80), updatedAt: ago(80),
     versions: [{ id: versionId, protocolTemplateId: '60000000-0000-4000-8000-0000000000a1', version: 1, title: 'Versión 1', content: { etapas: ['Recepción', 'Evaluación inicial', 'Medidas de resguardo', 'Seguimiento'] }, status: 'PUBLICADO', createdByUserId: PREVIEW_ME_ID, publishedAt: ago(80), createdAt: ago(80) }]
   }];
   const measures: CaseMeasure[] = [
@@ -123,11 +123,11 @@ export function seedFakeDb(): FakeDb {
   const courses: Course[] = ['1° Básico A', '2° Básico B', '7° Básico A'].map((name, index) => ({ id: `70000000-0000-4000-8000-00000000000${index + 1}`, establishmentId, name, level: index < 2 ? 'Básica' : 'Básica', academicYear: new Date().getFullYear(), isActive: true, version: 1, createdAt: now, updatedAt: now }));
   const students: Student[] = Array.from({ length: 8 }, (_, index) => ({
     id: `71000000-0000-4000-8000-0000000000${String(index + 1).padStart(2, '0')}`, establishmentId, rut: demoRut(24000001 + index), firstNames: `Estudiante demo ${String(index + 1).padStart(2, '0')}`, lastNames: ['Apellido Uno', 'Apellido Dos', 'Apellido Tres', 'Apellido Cuatro'][index % 4]!,
-    birthDate: `${2012 + (index % 4)}-0${(index % 9) + 1}-1${index % 9}T00:00:00.000Z`, courseId: courses[index % courses.length]!.id, isActive: index !== 7, version: 1, createdAt: now, updatedAt: now, course: null
+    sex: index % 2 ? 'Masculino' : 'Femenino', birthDate: `${2012 + (index % 4)}-0${(index % 9) + 1}-1${index % 9}T00:00:00.000Z`, email: `estudiante${index + 1}@demo.invalid`, courseId: courses[index % courses.length]!.id, isActive: index !== 7, version: 1, createdAt: now, updatedAt: now, course: null
   }));
   const guardians: Guardian[] = Array.from({ length: 4 }, (_, index) => ({
     id: `72000000-0000-4000-8000-0000000000${String(index + 1).padStart(2, '0')}`, establishmentId, rut: index === 3 ? null : demoRut(12000001 + index), firstNames: `Apoderado demo ${String(index + 1).padStart(2, '0')}`, lastNames: `Apellido ${['Uno', 'Dos', 'Tres', 'Cuatro'][index]}`,
-    email: `apoderado${index + 1}@demo.invalid`, phone: `+56 9 0000 000${index}`, isActive: true, version: 1, createdAt: now, updatedAt: now
+    birthDate: '1980-01-01T00:00:00.000Z', address: 'Dirección de ejemplo', email: `apoderado${index + 1}@demo.invalid`, phone: `+56 9 0000 000${index}`, isActive: true, version: 1, createdAt: now, updatedAt: now
   }));
   const studentGuardians = students.slice(0, 6).map((student, index) => ({ studentId: student.id, guardianId: guardians[index % 3]!.id, relationship: index % 2 ? 'PADRE' : 'MADRE', isPrimary: true, createdAt: now }));
   const staff: StaffMember[] = [
@@ -136,8 +136,8 @@ export function seedFakeDb(): FakeDb {
   ];
   participants[0]!.studentId = students[0]!.id; participants[1]!.guardianId = guardians[0]!.id;
   const summons: CaseSummons[] = [
-    { id: uuid(), caseId: first, participantId: participants[1]!.id, recipientLabel: participants[1]!.referenceLabel, scheduledAt: ahead(3), location: 'Oficina de convivencia', reason: 'Conversar sobre los acuerdos del caso (ejemplo).', status: 'PROGRAMADA', outcomeNote: null, createdByUserId: PREVIEW_ME_ID, version: 1, createdAt: ago(2), updatedAt: ago(2) },
-    { id: uuid(), caseId: first, participantId: null, recipientLabel: 'Profesor jefe del curso', scheduledAt: ago(9), location: 'Sala de reuniones', reason: 'Coordinar apoyos (ejemplo).', status: 'REALIZADA', outcomeNote: 'Se acordó seguimiento semanal.', createdByUserId: PREVIEW_ME_ID, version: 2, createdAt: ago(12), updatedAt: ago(9) }
+    { id: uuid(), caseId: first, participantId: participants[1]!.id, recipientLabel: participants[1]!.referenceLabel, scheduledAt: ahead(3), location: 'Oficina de convivencia', reason: 'Conversar sobre los acuerdos del caso (ejemplo).', status: 'PROGRAMADA', outcomeNote: null, emailSentAt: null, createdByUserId: PREVIEW_ME_ID, version: 1, createdAt: ago(2), updatedAt: ago(2) },
+    { id: uuid(), caseId: first, participantId: null, recipientLabel: 'Profesor jefe del curso', scheduledAt: ago(9), location: 'Sala de reuniones', reason: 'Coordinar apoyos (ejemplo).', status: 'REALIZADA', outcomeNote: 'Se acordó seguimiento semanal.', emailSentAt: ago(10), createdByUserId: PREVIEW_ME_ID, version: 2, createdAt: ago(12), updatedAt: ago(9) }
   ];
   const referrals: CaseReferral[] = [{ id: uuid(), caseId: first, typeCode: 'SALUD', institutionName: 'CESFAM de ejemplo', reason: 'Evaluación psicológica (ejemplo).', status: 'ENVIADA', contactName: null, sentAt: ago(5), responseNote: null, responseAt: null, closedAt: null, createdByUserId: PREVIEW_ME_ID, version: 2, createdAt: ago(7), updatedAt: ago(5) }];
   const establishments: Establishment[] = [{ id: establishmentId, code: 'PREVIEW', name: 'Establecimiento de previsualización', institutionalIdentifier: null, isActive: true, createdAt: ago(100), updatedAt: ago(100) }];
@@ -163,6 +163,13 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   const only = (b: Req['body'], keys: string[]) => { const extra = Object.keys(b).filter((key) => !keys.includes(key)); if (extra.length) fail(400, `property ${extra.join(', ')} should not exist`); return b; };
   const paginate = <T,>(items: T[], q: Req['query'], fallback = 20) => { const page = Math.max(1, Number(q.page ?? 1)); const limit = Math.min(100, Math.max(1, Number(q.limit ?? fallback))); return { items: items.slice((page - 1) * limit, page * limit), total: items.length, page, limit }; };
   const userView = (u: AdminUser) => ({ ...u });
+  /** Misma forma que los endpoints globales reales: una sola consulta por módulo, con el expediente asociado. */
+  const globalRows = <T extends { caseId: string }>(items: T[], req: Req) => {
+    const eligibleCases = db.cases.filter((record) => req.query.includeClosed === 'true' || record.status !== 'CERRADO');
+    const eligibleIds = new Set(eligibleCases.map((record) => record.id));
+    const casesById = new Map(eligibleCases.map((record) => [record.id, record]));
+    return { rows: items.filter((item) => eligibleIds.has(item.caseId)).map((item) => ({ case: casesById.get(item.caseId)!, item })), scanned: eligibleCases.length, eligible: eligibleCases.length, totalCases: eligibleCases.length, truncated: false };
+  };
 
   const routes: [string, RegExp, Handler][] = [];
   const on = (method: string, pattern: string, handler: Handler) => routes.push([method, new RegExp(`^${pattern.replace(/:[a-zA-Z]+/g, '([^/]+)')}$`), handler]);
@@ -170,7 +177,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
 
   // ── Autenticación ──
   on('POST', '/auth/login', () => fail(401, 'Credenciales inválidas'));
-  on('GET', '/auth/me', () => (db.loggedOut ? fail(401, 'Unauthorized') : { status: 200, data: { user: { id: db.me.id, email: db.me.email, displayName: db.me.displayName, roles: db.me.roles } } }));
+  on('GET', '/auth/me', () => (db.loggedOut ? fail(401, 'Unauthorized') : { status: 200, data: { user: { id: db.me.id, email: db.me.email, displayName: db.me.displayName, roles: db.me.roles, permissions: [...granted()] } } }));
   on('GET', '/auth/csrf', () => (db.loggedOut ? fail(401, 'Unauthorized') : { status: 200, data: { token: CSRF } }));
   on('POST', '/auth/logout', () => { db.loggedOut = true; return { status: 201, data: { success: true } }; });
   on('POST', '/auth/forgot-password', () => ({ status: 201, data: { message: 'Si la cuenta existe, recibirá instrucciones por correo.' } }));
@@ -193,7 +200,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     const roles = Array.isArray(body(req).roles) ? (body(req).roles as string[]) : fail(400, 'roles inválido');
     if (roles.includes('SYSTEM_ADMIN')) fail(403, 'No se concede SYSTEM_ADMIN al crear cuentas');
     if (db.users.some((u) => u.email === email)) fail(409, 'El correo ya está registrado');
-    const created: AdminUser = { id: uuid(), email, displayName, isActive: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), roles };
+    const created: AdminUser = { id: uuid(), email, displayName, isActive: false, invitationPending: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), roles };
     db.users.unshift(created); log('USER_CREATED', 'USER', created.id); log('ESTABLISHMENT_MEMBERSHIP_CHANGED', 'ESTABLISHMENT_MEMBERSHIP', `${establishmentId}:${created.id}`);
     return { status: 201, data: userView(created) };
   });
@@ -205,9 +212,9 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('PATCH', '/users/:id/status', (req, [id]) => {
     require('users.disable'); const user = db.users.find((u) => u.id === id) ?? fail(404, 'Usuario no encontrado');
     if (typeof body(req).isActive !== 'boolean') fail(400, 'isActive inválido');
-    if (body(req).isActive && !user.isActive && user.id !== db.me.id && user.roles.length && user.email.startsWith('pendiente')) fail(409, 'La cuenta pendiente debe aceptar su invitación');
+    if (body(req).isActive && !user.isActive && user.invitationPending) fail(409, 'La cuenta pendiente debe aceptar su invitación');
     if (!body(req).isActive && user.roles.includes('SYSTEM_ADMIN') && db.users.filter((u) => u.isActive && u.roles.includes('SYSTEM_ADMIN')).length < 2) fail(409, 'Debe existir al menos una persona administradora activa');
-    user.isActive = Boolean(body(req).isActive); log(user.isActive ? 'USER_ACTIVATED' : 'USER_DISABLED', 'USER', id); return { status: 200, data: userView(user) };
+    user.isActive = Boolean(body(req).isActive); if (!user.isActive) user.invitationPending = false; log(user.isActive ? 'USER_ACTIVATED' : 'USER_DISABLED', 'USER', id); return { status: 200, data: userView(user) };
   });
   on('PATCH', '/users/:id/roles', (req, [id]) => {
     require('roles.assign'); const user = db.users.find((u) => u.id === id) ?? fail(404, 'Usuario no encontrado'); const roles = Array.isArray(body(req).roles) ? (body(req).roles as string[]) : fail(400, 'roles inválido');
@@ -216,7 +223,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   });
   on('POST', '/users/:id/revoke-sessions', (_r, [id]) => { require('users.update'); if (!db.users.some((u) => u.id === id)) fail(404, 'Usuario no encontrado'); log('USER_SESSIONS_REVOKED', 'USER', id); return { status: 201, data: { success: true } }; });
   on('POST', '/users/:id/resend-invitation', (_r, [id]) => {
-    require('users.update'); const user = db.users.find((u) => u.id === id) ?? fail(404, 'Usuario no encontrado'); if (user.isActive) fail(409, 'La cuenta ya está activa');
+    require('users.update'); const user = db.users.find((u) => u.id === id) ?? fail(404, 'Usuario no encontrado'); if (!user.invitationPending) fail(409, user.isActive ? 'La cuenta ya está activa' : 'La cuenta está desactivada y no tiene una invitación pendiente');
     log('USER_INVITATION_SENT', 'USER', id); return { status: 201, data: { success: true } };
   });
   on('GET', '/roles', () => { require('roles.read'); return { status: 200, data: db.roles }; });
@@ -265,13 +272,15 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('POST', '/cases', (req) => {
     require('cases.create'); const b = body(req);
     const establishment = db.establishments.find((e) => e.id === b.establishmentId && e.isActive) ?? fail(404, 'Establecimiento no disponible');
+    const protocolVersionId = str(b.protocolVersionId, 'protocolVersionId', 1, 100);
+    if (!db.protocols.some((p) => p.establishmentId === establishment.id && p.versions.some((v) => v.id === protocolVersionId && v.status === 'PUBLICADO'))) fail(400, 'Seleccione un protocolo publicado disponible para el establecimiento');
     if (b.currentStageId && !db.stages.some((s) => s.id === b.currentStageId && s.establishmentId === establishment.id)) fail(400, 'Etapa no disponible para el establecimiento');
     const created: CaseRecord = {
       id: uuid(), establishmentId: establishment.id, folio: db.caseSequence++, title: str(b.title, 'title', 3, 180), initialDescription: optStr(b.initialDescription) ?? '', receivedAt: str(b.receivedAt, 'receivedAt', 8, 40),
       categoryCode: str(b.categoryCode, 'categoryCode', 1, 50), priority: str(b.priority, 'priority', 1, 40), status: 'ABIERTO', currentStageId: (b.currentStageId as string) ?? null, responsibleUserId: (b.responsibleUserId as string) ?? null,
       createdByUserId: db.me.id, closedAt: null, closureReason: null, nextAction: optStr(b.nextAction) ?? null, nextActionDueAt: optStr(b.nextActionDueAt) ?? null, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     };
-    db.cases.unshift(created); event(created.id, 'CASE_CREATED', { newStatus: 'ABIERTO', newStageId: created.currentStageId }); log('CASE_CREATED', 'CASE', created.id); return { status: 201, data: created };
+    db.cases.unshift(created); db.applications.push({ id: uuid(), caseId: created.id, protocolVersionId, appliedByUserId: db.me.id, appliedAt: new Date().toISOString(), revokedAt: null, revocationReason: null, version: 1 }); event(created.id, 'CASE_CREATED', { newStatus: 'ABIERTO', newStageId: created.currentStageId }); event(created.id, 'PROTOCOL_APPLIED', { relatedEntityType: 'PROTOCOL_VERSION', relatedEntityId: protocolVersionId }); log('CASE_CREATED', 'CASE', created.id); return { status: 201, data: created };
   });
   on('GET', '/cases/:id', (_r, [id]) => { require('cases.read'); return { status: 200, data: findCase(id) }; });
   on('PATCH', '/cases/:id', (req, [id]) => {
@@ -370,6 +379,13 @@ export function createFakeApi(options: FakeApiOptions = {}) {
 
   // ── Documentos ──
   on('GET', '/cases/:id/documents', (_r, [id]) => { require('documents.read'); findCase(id); return { status: 200, data: db.documents.filter((d) => d.caseId === id && !db.voidedIds.includes(d.id)).map(({ bytes: _bytes, ...meta }) => meta) }; });
+  on('POST', '/cases/:id/documents/uploads', (req, [id]) => {
+    require('documents.create'); findCase(id); openCase(id); const b = body(req);
+    const contentType = str(b.contentType, 'contentType', 1, 100);
+    const sizeBytes = Number(b.sizeBytes);
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(contentType) || !Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 10 * 1024 * 1024) fail(400, 'Datos de carga no válidos');
+    str(b.originalFilename, 'originalFilename', 1, 180); return { status: 201, data: { uploadId: uuid(), signedUrl: 'fake://document-upload' } };
+  });
   on('POST', '/cases/:id/documents', (req, [id]) => {
     require('documents.create'); findCase(id); openCase(id); const b = body(req);
     if (b.kind === 'EVIDENCIA') {
@@ -390,11 +406,17 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   });
 
   // ── Protocolos, medidas, seguimientos, tareas y notificaciones ──
+  on('GET', '/work-items/documents', (req) => { require('documents.read'); return { status: 200, data: globalRows(db.documents.filter((item) => !db.voidedIds.includes(item.id)).map(({ bytes: _bytes, ...item }) => item), req) }; });
+  on('GET', '/work-items/measures', (req) => { require('measures.read'); return { status: 200, data: globalRows(db.measures, req) }; });
+  on('GET', '/work-items/follow-ups', (req) => { require('follow-ups.read'); return { status: 200, data: globalRows(db.followUps.filter((item) => !db.voidedIds.includes(item.id)), req) }; });
+  on('GET', '/work-items/tasks', (req) => { require('tasks.read'); return { status: 200, data: globalRows(db.tasks, req) }; });
+  on('GET', '/work-items/interviews', (req) => { require('interviews.read'); return { status: 200, data: globalRows(db.interviews.filter((item) => !db.voidedIds.includes(item.id)), req) }; });
+  on('GET', '/work-items/reports', (req) => { require('reports.read'); return { status: 200, data: globalRows(db.reports.filter((item) => !db.voidedIds.includes(item.id)), req) }; });
   on('GET', '/protocols/:eid', (_r, [eid]) => { require('protocols.read'); return { status: 200, data: db.protocols.filter((p) => p.establishmentId === eid).map((p) => ({ ...p, versions: p.versions.filter((v) => v.status === 'PUBLICADO') })) }; });
   on('POST', '/protocols', (req) => {
     require('protocols.manage'); const b = body(req); let content: unknown; try { content = JSON.parse(String(b.content)); } catch { fail(400, 'content debe ser JSON'); }
     const id = uuid(); const version: ProtocolVersion = { id: uuid(), protocolTemplateId: id, version: 1, title: str(b.title, 'title', 3, 180), content, status: 'BORRADOR', createdByUserId: db.me.id, publishedAt: null, createdAt: new Date().toISOString() };
-    const template: ProtocolTemplate = { id, establishmentId: String(b.establishmentId), code: str(b.code, 'code', 2, 40).toUpperCase(), name: str(b.name, 'name', 3, 180), isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), versions: [version] };
+    const template: ProtocolTemplate = { id, establishmentId: String(b.establishmentId), code: str(b.code, 'code', 2, 40).toUpperCase(), name: str(b.name, 'name', 3, 180), categoryCodes: Array.isArray(b.categoryCodes) ? b.categoryCodes.map(String) : [], isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), versions: [version] };
     db.protocols.push(template); log('PROTOCOL_CREATED', 'PROTOCOL_TEMPLATE', id); return { status: 201, data: template };
   });
   on('POST', '/protocols/versions/:vid/publish', (req, [vid]) => {
@@ -501,14 +523,14 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     return { status: 200, data: paginate(list.map(studentView), req.query, 25) };
   });
   on('POST', '/students/import', (req) => {
-    require('students.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId);
+    require('students.manage'); const b = body(req); const establishmentId = db.establishments.filter((item) => item.isActive).map((item) => item.id)[0] ?? fail(400, 'No hay un establecimiento activo configurado');
     const rows = Array.isArray(b.rows) ? (b.rows as Record<string, unknown>[]) : fail(400, 'rows inválido'); if (!rows.length || rows.length > 500) fail(400, 'rows inválido');
     const year = Number(b.academicYear); const seen = new Set<string>(); const errors: { row: number; message: string }[] = [];
     const parsed = rows.map((row, index) => {
       let rut: string | null = null; try { rut = rutOf(row.rut); } catch { errors.push({ row: index + 1, message: 'RUT no válido' }); }
       if (rut && seen.has(rut)) errors.push({ row: index + 1, message: 'RUT repetido en el archivo' }); else if (rut) seen.add(rut);
       if (!optStr(row.firstNames) || !optStr(row.lastNames)) errors.push({ row: index + 1, message: 'Faltan nombres o apellidos' });
-      return { rut, firstNames: optStr(row.firstNames) ?? '', lastNames: optStr(row.lastNames) ?? '', birthDate: optStr(row.birthDate), courseName: optStr(row.courseName) };
+      return { rut, firstNames: optStr(row.firstNames) ?? '', lastNames: optStr(row.lastNames) ?? '', sex: optStr(row.sex), birthDate: optStr(row.birthDate), email: optStr(row.email), courseName: optStr(row.courseName) };
     });
     if (errors.length) throw new FakeHttpError(400, 'El archivo tiene filas con errores; no se importó nada');
     let created = 0; let updated = 0; let createdCourses = 0;
@@ -520,16 +542,16 @@ export function createFakeApi(options: FakeApiOptions = {}) {
         courseId = course.id;
       }
       const existing = db.students.find((s) => s.establishmentId === establishmentId && s.rut === row.rut);
-      if (existing) { Object.assign(existing, { firstNames: row.firstNames, lastNames: row.lastNames, isActive: true, ...(row.birthDate ? { birthDate: `${row.birthDate}T00:00:00.000Z` } : {}), ...(courseId ? { courseId } : {}) }); stamp(existing); updated += 1; }
-      else { db.students.push({ id: uuid(), establishmentId, rut: row.rut!, firstNames: row.firstNames, lastNames: row.lastNames, birthDate: row.birthDate ? `${row.birthDate}T00:00:00.000Z` : null, courseId, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), course: null }); created += 1; }
+      if (existing) { Object.assign(existing, { firstNames: row.firstNames, lastNames: row.lastNames, isActive: true, ...(row.sex ? { sex: row.sex } : {}), ...(row.email ? { email: row.email } : {}), ...(row.birthDate ? { birthDate: `${row.birthDate}T00:00:00.000Z` } : {}), ...(courseId ? { courseId } : {}) }); stamp(existing); updated += 1; }
+      else { db.students.push({ id: uuid(), establishmentId, rut: row.rut!, firstNames: row.firstNames, lastNames: row.lastNames, sex: row.sex ?? null, birthDate: row.birthDate ? `${row.birthDate}T00:00:00.000Z` : null, email: row.email ?? null, courseId, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), course: null }); created += 1; }
     }
-    log('STUDENTS_IMPORTED', 'ESTABLISHMENT', establishmentId); return { status: 201, data: { created, updated, createdCourses } };
+    log('STUDENTS_IMPORTED', 'ESTABLISHMENT', establishmentId); return { status: 201, data: { created, updated, createdCourses, guardiansCreated: 0, guardiansUpdated: 0, linksCreated: 0 } };
   });
   on('POST', '/students', (req) => {
     require('students.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId); const rut = rutOf(b.rut);
     if (b.courseId && !db.courses.some((c) => c.id === b.courseId && c.establishmentId === establishmentId)) fail(404, 'Curso no disponible');
     if (db.students.some((s) => s.establishmentId === establishmentId && s.rut === rut)) dup('Ya existe un estudiante con ese RUT en el establecimiento');
-    const created: Student = { id: uuid(), establishmentId, rut: rut!, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), birthDate: optStr(b.birthDate) ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null, courseId: (b.courseId as string) ?? null, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), course: null };
+    const created: Student = { id: uuid(), establishmentId, rut: rut!, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), sex: optStr(b.sex) ?? null, birthDate: optStr(b.birthDate) ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null, email: optStr(b.email)?.toLowerCase() ?? null, courseId: (b.courseId as string) ?? null, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), course: null };
     db.students.push(created); log('STUDENT_CREATED', 'STUDENT', created.id); return { status: 201, data: studentView(created) };
   });
   const studentOf = (id: string) => db.students.find((s) => s.id === id) ?? fail(404, 'Estudiante no disponible');
@@ -538,7 +560,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     require('students.manage'); const s = studentOf(id); const b = body(req); if (s.version !== expected(b)) fail(409, 'El estudiante fue modificado por otra persona');
     if (typeof b.rut === 'string') { const rut = rutOf(b.rut); if (db.students.some((x) => x.id !== id && x.establishmentId === s.establishmentId && x.rut === rut)) dup('Ya existe un estudiante con ese RUT en el establecimiento'); s.rut = rut!; }
     if (typeof b.firstNames === 'string') s.firstNames = b.firstNames.trim(); if (typeof b.lastNames === 'string') s.lastNames = b.lastNames.trim();
-    if ('birthDate' in b) s.birthDate = b.birthDate ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null; if ('courseId' in b) s.courseId = (b.courseId as string | null) ?? null; if (typeof b.isActive === 'boolean') s.isActive = b.isActive;
+    if ('sex' in b) s.sex = optStr(b.sex) ?? null; if ('birthDate' in b) s.birthDate = b.birthDate ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null; if ('email' in b) s.email = optStr(b.email)?.toLowerCase() ?? null; if ('courseId' in b) s.courseId = (b.courseId as string | null) ?? null; if (typeof b.isActive === 'boolean') s.isActive = b.isActive;
     stamp(s); log('STUDENT_UPDATED', 'STUDENT', id); return { status: 200, data: studentView(s) };
   });
   on('GET', '/students/:id/cases', (_r, [id]) => {
@@ -570,7 +592,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
   on('POST', '/guardians', (req) => {
     require('guardians.manage'); const b = body(req); const establishmentId = String(b.establishmentId); memberOf(establishmentId); const rut = rutOf(b.rut, true);
     if (rut && db.guardians.some((g) => g.establishmentId === establishmentId && g.rut === rut)) dup('Ya existe un apoderado con ese RUT en el establecimiento');
-    const created: Guardian = { id: uuid(), establishmentId, rut, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), email: optStr(b.email)?.toLowerCase() ?? null, phone: optStr(b.phone) ?? null, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const created: Guardian = { id: uuid(), establishmentId, rut, firstNames: str(b.firstNames, 'firstNames', 1, 120), lastNames: str(b.lastNames, 'lastNames', 1, 120), birthDate: optStr(b.birthDate) ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null, address: optStr(b.address) ?? null, email: optStr(b.email)?.toLowerCase() ?? null, phone: optStr(b.phone) ?? null, isActive: true, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     db.guardians.push(created); log('GUARDIAN_CREATED', 'GUARDIAN', created.id); return { status: 201, data: created };
   });
   on('GET', '/guardians/:id', (_r, [id]) => {
@@ -582,7 +604,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     require('guardians.manage'); const g = guardianOf(id); const b = body(req); if (g.version !== expected(b)) fail(409, 'El apoderado fue modificado por otra persona');
     if ('rut' in b) { const rut = rutOf(b.rut, true); if (rut && db.guardians.some((x) => x.id !== id && x.establishmentId === g.establishmentId && x.rut === rut)) dup('Ya existe un apoderado con ese RUT en el establecimiento'); g.rut = rut; }
     if (typeof b.firstNames === 'string') g.firstNames = b.firstNames.trim(); if (typeof b.lastNames === 'string') g.lastNames = b.lastNames.trim();
-    if ('email' in b) g.email = optStr(b.email)?.toLowerCase() ?? null; if ('phone' in b) g.phone = optStr(b.phone) ?? null; if (typeof b.isActive === 'boolean') g.isActive = b.isActive;
+    if ('birthDate' in b) g.birthDate = optStr(b.birthDate) ? `${String(b.birthDate).slice(0, 10)}T00:00:00.000Z` : null; if ('address' in b) g.address = optStr(b.address) ?? null; if ('email' in b) g.email = optStr(b.email)?.toLowerCase() ?? null; if ('phone' in b) g.phone = optStr(b.phone) ?? null; if (typeof b.isActive === 'boolean') g.isActive = b.isActive;
     stamp(g); log('GUARDIAN_UPDATED', 'GUARDIAN', id); return { status: 200, data: g };
   });
 
@@ -613,7 +635,7 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     require('summons.manage'); openCase(id); const b = body(req); let recipientLabel = optStr(b.recipientLabel);
     if (b.participantId) { const link = db.links.find((l) => l.caseId === id && l.participantId === b.participantId && !l.unlinkedAt) ?? fail(404, 'El involucrado no está asociado al expediente'); recipientLabel = recipientLabel ?? link.participant.referenceLabel; }
     const label = recipientLabel ?? fail(400, 'Indique a quién se cita');
-    const created: CaseSummons = { id: uuid(), caseId: id, participantId: (b.participantId as string) ?? null, recipientLabel: label, scheduledAt: str(b.scheduledAt, 'scheduledAt', 8, 40), location: str(b.location, 'location', 2, 200), reason: str(b.reason, 'reason', 3, 1000), status: 'PROGRAMADA', outcomeNote: null, createdByUserId: db.me.id, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const created: CaseSummons = { id: uuid(), caseId: id, participantId: (b.participantId as string) ?? null, recipientLabel: label, scheduledAt: str(b.scheduledAt, 'scheduledAt', 8, 40), location: str(b.location, 'location', 2, 200), reason: str(b.reason, 'reason', 3, 1000), status: 'PROGRAMADA', outcomeNote: null, emailSentAt: null, createdByUserId: db.me.id, version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     db.summons.push(created); event(id, 'SUMMONS_CREATED', { relatedEntityType: 'CASE_SUMMONS', relatedEntityId: created.id }); log('SUMMONS_CREATED', 'CASE_SUMMONS', created.id); return { status: 201, data: created };
   });
   on('POST', '/cases/:id/summons/:sid/update', (req, [id, sid]) => {
@@ -623,6 +645,15 @@ export function createFakeApi(options: FakeApiOptions = {}) {
     if (s.version !== expected(b)) fail(409, 'La citación fue modificada por otra persona');
     if (typeof b.status === 'string') s.status = b.status as SummonsStatus; if (typeof b.scheduledAt === 'string') s.scheduledAt = b.scheduledAt; if (typeof b.location === 'string') s.location = b.location.trim(); if (typeof b.reason === 'string') s.reason = b.reason.trim(); if (typeof b.outcomeNote === 'string') s.outcomeNote = b.outcomeNote.trim() || null;
     stamp(s); event(id, 'SUMMONS_UPDATED', { relatedEntityType: 'CASE_SUMMONS', relatedEntityId: sid }); log('SUMMONS_UPDATED', 'CASE_SUMMONS', sid); return { status: 201, data: s };
+  });
+  on('GET', '/cases/:id/summons/:sid/letter', (_req, [id, sid]) => {
+    require('summons.read'); const s = db.summons.find((x) => x.id === sid && x.caseId === id) ?? fail(404, 'Citación no disponible');
+    return { status: 200, data: new Blob([`Carta de citación de demostración para ${s.recipientLabel}.`], { type: 'application/pdf' }) };
+  });
+  on('POST', '/cases/:id/summons/:sid/send-email', (req, [id, sid]) => {
+    require('summons.manage'); const s = db.summons.find((x) => x.id === sid && x.caseId === id) ?? fail(404, 'Citación no disponible'); const b = body(req);
+    if (s.status !== 'PROGRAMADA') fail(409, 'Solo se puede enviar una citación programada'); if (s.version !== expected(b)) fail(409, 'La citación fue modificada por otra persona'); str(b.recipientEmail, 'recipientEmail', 5, 180);
+    s.emailSentAt = new Date().toISOString(); stamp(s); event(id, 'SUMMONS_EMAIL_SENT', { relatedEntityType: 'CASE_SUMMONS', relatedEntityId: sid }); log('SUMMONS_EMAIL_SENT', 'CASE_SUMMONS', sid); return { status: 201, data: s };
   });
   on('GET', '/summons', (req) => {
     require('summons.read'); const q = req.query;

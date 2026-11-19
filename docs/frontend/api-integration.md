@@ -26,7 +26,7 @@ Estado al 2026-10-23. Base de referencia: [backend-contracts.md](../api/backend-
 | Estudiantes | `GET/POST /students`, `GET/PATCH /students/:id`, `GET /students/:id/cases`, `POST /students/:id/guardians`, `POST …/guardians/:guardianId/unlink`, `POST /students/import` | Conectadas (Estudiantes, ficha y carga masiva CSV) |
 | Apoderados | `GET/POST /guardians`, `GET/PATCH /guardians/:id` | Conectadas (Apoderados y ficha) |
 | Funcionarios | `GET/POST /staff`, `PATCH /staff/:id` | Conectadas (Funcionarios) |
-| Citaciones | `GET/POST /cases/:id/summons`, `POST …/summons/:id/update`, `GET /summons` | Conectadas (pestaña del expediente y listado global) |
+| Citaciones | `GET/POST /cases/:id/summons`, `POST …/summons/:id/update`, `GET …/letter`, `POST …/send-email`, `GET /summons` | Conectadas (pestaña del expediente y listado global) |
 | Derivaciones | `GET/POST /cases/:id/referrals`, `POST …/referrals/:id/update`, `GET /referrals` | Conectadas (pestaña del expediente y listado global) |
 
 Resultado: 91 de 93 operaciones tienen pantalla; las 2 restantes (`GET /roles/:id` y `PATCH …/stages/:stageId`) están en la capa de servicios y no se usan porque el listado ya trae lo necesario.
@@ -35,7 +35,7 @@ Resultado: 91 de 93 operaciones tienen pantalla; las 2 restantes (`GET /roles/:i
 
 Panel de inicio, Casos (listado, creación, expediente con 13 pestañas), Denuncias, Medidas, Protocolos, Seguimientos, Tareas, Entrevistas, Citaciones, Derivaciones, Calendario, Documentos, Reportes, Notificaciones, Estudiantes (con ficha y carga masiva), Apoderados (con ficha), Funcionarios, Cursos, Usuarios (listado y ficha), Roles y permisos, Establecimientos, Auditoría y Configuración. El login y la recuperación de contraseña se integraron en la fase anterior.
 
-Las pantallas globales (denuncias, medidas, seguimientos, tareas, entrevistas, documentos, calendario y los indicadores del panel) se componen consultando los expedientes autorizados más recientes (hasta 300 para el listado y 60 para el contenido) y, de cada uno, su contenido. Cada vista indica cuántos expedientes revisó. Es una composición de endpoints reales y autorizados, no una estimación, pero no es un listado global del servidor.
+Las pantallas globales (denuncias, medidas, seguimientos, tareas, entrevistas y documentos) usan los endpoints `/work-items/*`. El calendario combina esos plazos con `GET /summons` filtrado al período visible; el panel usa el total de citaciones programadas y derivaciones pendientes. El servidor aplica la misma autorización contextual que en cada expediente y entrega las filas ya asociadas a su expediente en una sola consulta por tipo.
 
 ## Comunidad educativa
 
@@ -54,19 +54,17 @@ Resueltas con el módulo de comunidad educativa (2026-10-23):
 
 Siguen pendientes en el backend:
 
-1. **Permisos efectivos en `GET /auth/me`**. Solo entrega roles. El menú y los botones usan la matriz inicial del seed como indicio; si se altera la matriz en la base, la interfaz puede mostrar u ocultar de más (el servidor siempre decide con 403).
-2. **Estado de invitación en el usuario**. `isActive: false` no distingue "desactivada" de "invitación pendiente". La ficha ofrece las dos acciones y muestra el 409 del servidor si no corresponde.
-3. **Listados de accesos concedidos, borradores de protocolo y protocolos aplicados**. No existen: no se puede ver quién tiene acceso a un expediente, recuperar un borrador de protocolo sin publicar ni listar aplicaciones (se deducen de la línea de tiempo).
-4. **Búsqueda por texto en `GET /cases`**. Hoy la búsqueda y los filtros por categoría y responsable se hacen en el navegador sobre hasta 300 expedientes.
-5. **Listados globales y estadísticas** (tareas, medidas, seguimientos, denuncias, documentos, indicadores del panel): permitirían reemplazar la composición por expediente y evitar muchas llamadas. Citaciones y derivaciones ya tienen listado global.
-6. **Catálogos**: categoría, prioridad, canal, clasificación, modalidad, participación, vínculo familiar y tipo de institución de derivación son texto libre en la API. La interfaz usa una convención (ver abajo); el establecimiento debe definir los catálogos oficiales.
-7. **Entrevistas "programadas"**. El modelo solo guarda entrevistas ya realizadas (borrador o finalizada); no hay agenda ni asistentes. La interfaz informa entrevistas en borrador, no programadas.
-8. **Documentos por entrevista**. Los documentos pertenecen al expediente; no existe el vínculo documento-entrevista.
-9. **Generación de cartas de citación y notificación a apoderados**. La citación se registra y se sigue, pero el servidor no genera el documento ni envía correos.
+1. **Listados de accesos concedidos y borradores de protocolo**. No existen: no se puede ver quién tiene acceso a un expediente ni recuperar un borrador de protocolo sin publicar. Las aplicaciones de protocolos ya tienen listado propio.
+2. **Búsqueda por texto en `GET /cases`**. Hoy la búsqueda y los filtros por categoría y responsable se hacen en el navegador sobre hasta 300 expedientes.
+3. **Estadísticas agregadas**. Los listados globales ya se resuelven en servidor; faltan indicadores agregados para evitar cálculos en el navegador cuando el volumen crezca. Citaciones y derivaciones ya tienen listado global.
+4. **Catálogos**: categoría, prioridad, canal, clasificación, modalidad, participación, vínculo familiar y tipo de institución de derivación son texto libre en la API. La interfaz usa una convención (ver abajo); el establecimiento debe definir los catálogos oficiales.
+5. **Entrevistas "programadas"**. El modelo solo guarda entrevistas ya realizadas (borrador o finalizada); no hay agenda ni asistentes. La interfaz informa entrevistas en borrador, no programadas.
+6. **Documentos por entrevista**. Los documentos pertenecen al expediente; no existe el vínculo documento-entrevista.
+7. **Envío institucional de citaciones**. La carta PDF y el envío SMTP ya están disponibles; antes de datos reales se debe configurar y probar el remitente institucional conforme a `docs/operacion/preparacion-operativa.md`.
 
 ## Problemas del backend
 
-- **Límite de cuerpo JSON** (resuelto el 2026-10-23): el servidor rechazaba con 413 cualquier cuerpo de más de 100 KB, de modo que solo cabían archivos de ~75 KB aunque el contrato admite 10 MiB. Ahora la carga de documentos (`/api/cases/:caseId/documents`) acepta hasta 15 MB de JSON (un archivo de 10 MiB en base64 pesa ~13,4 MB) y el resto de la API mantiene 100 KB. Verificado contra la API real: 200 KB y 13 MB llegan a la autenticación (401) y 16 MB responde 413.
+- **Carga documental directa**: los archivos ya no pasan como JSON/base64 por la API. El backend autoriza una URL firmada de Supabase Storage, el navegador carga el archivo directamente y la API lo vuelve a validar antes de registrarlo. El resto de la API mantiene un límite de JSON de 100 KB.
 
 ## Convenciones de la interfaz
 

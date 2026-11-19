@@ -32,7 +32,8 @@ describe('Auth HTTP integration', () => {
     const token = cookie.split(';')[0].split('=')[1];
     const { createHash } = await import('node:crypto');
     await db.session.updateMany({ where: { tokenHash: createHash('sha256').update(token).digest('hex') }, data: { lastSeenAt: new Date(Date.now() - 16 * 60_000) } });
-    await agent.get('/api/auth/me').expect(200);
+    const me = await agent.get('/api/auth/me').expect(200);
+    expect(me.body.user).toMatchObject({ email, roles: ['TEST_ROLE'], permissions: [] });
     expect((await db.session.findUniqueOrThrow({ where: { tokenHash: createHash('sha256').update(token).digest('hex') } })).lastSeenAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
     const csrf = await agent.get('/api/auth/csrf').expect(200);
     await agent.post('/api/auth/logout').expect(403); await agent.post('/api/auth/logout').set('X-CSRF-Token', 'incorrecto').expect(403); await agent.post('/api/auth/logout').set('X-CSRF-Token', csrf.body.token).expect(201); await agent.get('/api/auth/me').expect(401);

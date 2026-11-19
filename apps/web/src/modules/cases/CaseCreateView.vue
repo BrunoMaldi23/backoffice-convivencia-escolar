@@ -16,6 +16,7 @@ import SectionCard from '@/components/SectionCard.vue';
 import UserSelect from '@/components/UserSelect.vue';
 import { caseScope, useApiMutation } from '@/composables/useApiMutation';
 import { useCreateCase } from '@/composables/useCases';
+import { useProtocols } from '@/composables/useAdmin';
 import { useEstablishmentContext } from '@/composables/useEstablishmentContext';
 import { useSession } from '@/composables/useSession';
 import { CATEGORY_OPTIONS, CHANNEL_OPTIONS, CLASSIFICATION_OPTIONS, formatFolio } from '@/lib/catalogs';
@@ -38,7 +39,7 @@ const createReport = useApiMutation((v: { caseId: string; input: Parameters<type
 
 const today = new Date();
 const form = reactive({
-  establishmentId: null as string | null, title: '', category: null as string | null, priority: 'MEDIA' as string | null, receivedAt: today as Date | null,
+  establishmentId: null as string | null, protocolVersionId: null as string | null, title: '', category: null as string | null, priority: 'MEDIA' as string | null, receivedAt: today as Date | null,
   description: '', responsibleUserId: null as string | null, nextAction: '', nextActionDueAt: null as Date | null,
   channel: 'DIRECTO' as string | null, classification: 'SIN_CLASIFICAR' as string | null, factual: '', background: ''
 });
@@ -46,12 +47,16 @@ const includeReport = ref(props.withReport && can('reports.create'));
 const errors = ref<Record<string, string>>({});
 const created = ref<CaseRecord | null>(null);
 const selectedEstablishment = computed(() => form.establishmentId ?? establishment.currentId.value);
+const protocols = useProtocols(() => selectedEstablishment.value);
+const protocolOptions = computed(() => (protocols.data.value ?? []).flatMap((template) => template.versions
+  .filter((version) => version.status === 'PUBLICADO')
+  .map((version) => ({ label: template.name, value: version.id }))));
 const reportAllowed = computed(() => can('reports.create'));
 const pending = computed(() => createCase.isPending.value || createReport.isPending.value);
 const failure = computed(() => createReport.error.value ?? createCase.error.value);
 
 const caseRules = {
-  establishmentId: [required('Seleccione el establecimiento.')], title: [required('Escriba un título para el caso.'), minLength(3), maxLength(180)], category: [required('Seleccione una categoría.')],
+  establishmentId: [required('Seleccione el establecimiento.')], protocolVersionId: [required('Seleccione el protocolo aplicable.')], title: [required('Escriba un título para el caso.'), minLength(3), maxLength(180)], category: [required('Seleccione una categoría.')],
   priority: [required('Seleccione la prioridad.')], receivedAt: [required('Indique la fecha de recepción.')], description: [maxLength(4000)], nextAction: [maxLength(500)]
 };
 const reportRules = { channel: [required('Seleccione el canal de recepción.')], classification: [required('Seleccione la clasificación.')], factual: [required('Describa los hechos informados.'), minLength(3), maxLength(4000)], background: [maxLength(4000)] };
@@ -68,7 +73,7 @@ async function submit() {
   if (!created.value) {
     try {
       created.value = await createCase.mutateAsync({
-        establishmentId: view.establishmentId!, title: form.title.trim(), categoryCode: form.category!, priority: form.priority!, receivedAt: dateToIso(form.receivedAt!),
+        establishmentId: view.establishmentId!, protocolVersionId: form.protocolVersionId!, title: form.title.trim(), categoryCode: form.category!, priority: form.priority!, receivedAt: dateToIso(form.receivedAt!),
         ...(form.description.trim() ? { initialDescription: form.description.trim() } : {}), ...(form.responsibleUserId ? { responsibleUserId: form.responsibleUserId } : {}),
         ...(form.nextAction.trim() ? { nextAction: form.nextAction.trim() } : {}), ...(form.nextActionDueAt ? { nextActionDueAt: dateToIso(form.nextActionDueAt) } : {})
       });
@@ -106,7 +111,10 @@ async function submit() {
               <Select v-model="form.establishmentId" :input-id="id" :options="establishment.options.value" option-label="label" option-value="value" :invalid="invalid" :aria-describedby="describedby" :placeholder="establishment.nameOf(selectedEstablishment ?? '')" class="w-full" />
             </template>
           </FormField>
-          <FormField id="nc-title" label="Título" required help="Describa la situación sin incluir datos personales innecesarios." :error="errors.title" class="lg:col-span-3">
+          <FormField id="nc-protocolVersionId" label="Protocolo de actuación" required help="Busque por código o nombre. Quedará aplicado al expediente desde su creación." :error="errors.protocolVersionId" class="lg:col-span-3">
+            <template #default="{ id, invalid, describedby }"><Select v-model="form.protocolVersionId" :input-id="id" :options="protocolOptions" option-label="label" option-value="value" :loading="protocols.isPending.value" :disabled="!protocolOptions.length" filter filter-by="label" :invalid="invalid" :aria-describedby="describedby" placeholder="Buscar protocolo" class="w-full" /></template>
+          </FormField>
+          <FormField id="nc-title" label="Título del caso" required help="Describa la situación específica sin incluir datos personales innecesarios." :error="errors.title" class="lg:col-span-3">
             <template #default="{ id, invalid, describedby }"><InputText :id="id" v-model="form.title" maxlength="180" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
           </FormField>
           <FormField id="nc-category" label="Categoría" required :error="errors.category">

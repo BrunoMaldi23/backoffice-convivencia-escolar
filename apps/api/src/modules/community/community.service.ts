@@ -7,7 +7,11 @@ import { InstitutionsService } from '../institutions/institutions.service';
 
 type Tx = Prisma.TransactionClient;
 type Paging = { skip: number; take: number; page: number; limit: number };
-export interface ImportStudentRow { rut: string; firstNames: string; lastNames: string; birthDate?: string; courseName?: string }
+export interface ImportGuardianRow { rut?: string; firstNames?: string; lastNames?: string; birthDate?: string; phone?: string; email?: string; address?: string }
+export interface ImportStudentRow {
+  rut: string; firstNames: string; lastNames: string; birthDate?: string; sex?: string; email?: string; courseName?: string;
+  mother?: ImportGuardianRow; father?: ImportGuardianRow; guardian?: ImportGuardianRow;
+}
 
 const guardianSummary = { id: true, firstNames: true, lastNames: true, phone: true, email: true, isActive: true } as const;
 const courseSummary = { id: true, name: true, academicYear: true } as const;
@@ -65,24 +69,24 @@ export class CommunityService {
     await this.institutions.requireActiveMembership(actor, student.establishmentId);
     return student;
   }
-  async createStudent(actor: string, data: { establishmentId: string; rut: string; firstNames: string; lastNames: string; birthDate?: string; courseId?: string }, ctx: AuditRequestContext) {
+  async createStudent(actor: string, data: { establishmentId: string; rut: string; firstNames: string; lastNames: string; sex?: string; birthDate?: string; email?: string; courseId?: string }, ctx: AuditRequestContext) {
     const rut = this.requireRut(data.rut);
     return this.write(() => this.db.$transaction(async (tx) => {
       await this.institutions.requireActiveMembership(actor, data.establishmentId, tx);
       if (data.courseId) await this.requireCourse(tx, data.establishmentId, data.courseId);
-      const student = await tx.student.create({ data: { establishmentId: data.establishmentId, rut, firstNames: data.firstNames.trim(), lastNames: data.lastNames.trim(), birthDate: this.date(data.birthDate), courseId: data.courseId ?? null }, include: { course: { select: courseSummary } } });
+      const student = await tx.student.create({ data: { establishmentId: data.establishmentId, rut, firstNames: data.firstNames.trim(), lastNames: data.lastNames.trim(), sex: data.sex?.trim() || null, birthDate: this.date(data.birthDate), email: data.email?.trim().toLowerCase() || null, courseId: data.courseId ?? null }, include: { course: { select: courseSummary } } });
       await this.record(tx, actor, 'STUDENT_CREATED', 'STUDENT', student.id, { establishmentId: data.establishmentId }, ctx);
       return student;
     }), 'Ya existe un estudiante con ese RUT en el establecimiento');
   }
-  async updateStudent(actor: string, id: string, data: { expectedVersion: number; rut?: string; firstNames?: string; lastNames?: string; birthDate?: string | null; courseId?: string | null; isActive?: boolean }, ctx: AuditRequestContext) {
+  async updateStudent(actor: string, id: string, data: { expectedVersion: number; rut?: string; firstNames?: string; lastNames?: string; sex?: string | null; birthDate?: string | null; email?: string | null; courseId?: string | null; isActive?: boolean }, ctx: AuditRequestContext) {
     const rut = data.rut === undefined ? undefined : this.requireRut(data.rut);
     return this.write(() => this.db.$transaction(async (tx) => {
       const current = await tx.student.findUnique({ where: { id } });
       if (!current) throw new NotFoundException('Estudiante no disponible');
       await this.institutions.requireActiveMembership(actor, current.establishmentId, tx);
       if (data.courseId) await this.requireCourse(tx, current.establishmentId, data.courseId);
-      const result = await tx.student.updateMany({ where: { id, version: data.expectedVersion }, data: { ...(rut === undefined ? {} : { rut }), ...(data.firstNames === undefined ? {} : { firstNames: data.firstNames.trim() }), ...(data.lastNames === undefined ? {} : { lastNames: data.lastNames.trim() }), ...(data.birthDate === undefined ? {} : { birthDate: data.birthDate === null ? null : this.date(data.birthDate) }), ...(data.courseId === undefined ? {} : { courseId: data.courseId }), ...(data.isActive === undefined ? {} : { isActive: data.isActive }), version: { increment: 1 } } });
+      const result = await tx.student.updateMany({ where: { id, version: data.expectedVersion }, data: { ...(rut === undefined ? {} : { rut }), ...(data.firstNames === undefined ? {} : { firstNames: data.firstNames.trim() }), ...(data.lastNames === undefined ? {} : { lastNames: data.lastNames.trim() }), ...(data.sex === undefined ? {} : { sex: data.sex?.trim() || null }), ...(data.birthDate === undefined ? {} : { birthDate: data.birthDate === null ? null : this.date(data.birthDate) }), ...(data.email === undefined ? {} : { email: data.email?.trim().toLowerCase() || null }), ...(data.courseId === undefined ? {} : { courseId: data.courseId }), ...(data.isActive === undefined ? {} : { isActive: data.isActive }), version: { increment: 1 } } });
       if (result.count !== 1) throw new ConflictException('El estudiante fue modificado por otra persona');
       await this.record(tx, actor, 'STUDENT_UPDATED', 'STUDENT', id, { establishmentId: current.establishmentId, fields: Object.keys(data).filter((key) => key !== 'expectedVersion') }, ctx);
       return tx.student.findUniqueOrThrow({ where: { id }, include: { course: { select: courseSummary } } });
@@ -121,8 +125,8 @@ export class CommunityService {
     const links = await this.db.caseParticipant.findMany({ where: { unlinkedAt: null, participant: { studentId }, case: this.institutions.caseAccessWhere(actor) }, select: { participationCode: true, case: { select: { id: true, folio: true, title: true, status: true, priority: true, receivedAt: true } } }, orderBy: { linkedAt: 'desc' } });
     return links.map((link) => ({ participationCode: link.participationCode, ...link.case }));
   }
-  /** Carga masiva: todo o nada. Crea los estudiantes nuevos y actualiza nombres y curso de los existentes (por RUT). */
-  async importStudents(actor: string, data: { establishmentId: string; academicYear: number; rows: ImportStudentRow[] }, ctx: AuditRequestContext) {
+  /** Carga masiva: todo o nada. Crea o actualiza estudiantes, apoderados/as y sus vínculos por RUN. */
+  async importStudents(actor: string, data: { establishmentId?: string; academicYear: number; rows: ImportStudentRow[] }, ctx: AuditRequestContext) {
     const errors: { row: number; message: string }[] = [];
     const seen = new Set<string>();
     const parsed = data.rows.map((row, index) => {
@@ -136,28 +140,83 @@ export class CommunityService {
       if (!firstNames || !lastNames) errors.push({ row: line, message: 'Faltan nombres o apellidos' });
       const birthDate = row.birthDate?.trim() ? this.date(row.birthDate.trim()) : undefined;
       if (row.birthDate?.trim() && !birthDate) errors.push({ row: line, message: 'Fecha de nacimiento no válida (use AAAA-MM-DD)' });
-      return { rut, firstNames, lastNames, birthDate, courseName: row.courseName?.trim() || undefined };
+      const importGuardian = (kind: 'mother' | 'father' | 'guardian') => {
+        const contact = row[kind];
+        if (!contact) return undefined;
+        const values = [contact.rut, contact.firstNames, contact.lastNames, contact.birthDate, contact.phone, contact.email, contact.address].map((value) => value?.trim() ?? '');
+        if (!values.some(Boolean)) return undefined;
+        const contactRut = contact.rut?.trim() ? normalizeRut(contact.rut) : undefined;
+        if (contact.rut?.trim() && !contactRut) errors.push({ row: line, message: `RUN de ${kind === 'mother' ? 'la madre' : kind === 'father' ? 'el padre' : 'apoderado/a'} no válido` });
+        const contactFirstNames = contact.firstNames?.trim() ?? '';
+        const contactLastNames = contact.lastNames?.trim() ?? '';
+        if (!contactFirstNames || !contactLastNames) errors.push({ row: line, message: `Faltan nombres o apellidos de ${kind === 'mother' ? 'la madre' : kind === 'father' ? 'el padre' : 'apoderado/a'}` });
+        const contactBirthDate = contact.birthDate?.trim() ? this.date(contact.birthDate.trim()) : undefined;
+        if (contact.birthDate?.trim() && !contactBirthDate) errors.push({ row: line, message: `Fecha de nacimiento de ${kind === 'mother' ? 'la madre' : kind === 'father' ? 'el padre' : 'apoderado/a'} no válida (use AAAA-MM-DD)` });
+        return { rut: contactRut, firstNames: contactFirstNames, lastNames: contactLastNames, birthDate: contactBirthDate, phone: contact.phone?.trim() || undefined, email: contact.email?.trim().toLowerCase() || undefined, address: contact.address?.trim() || undefined };
+      };
+      return { rut, firstNames, lastNames, birthDate, sex: row.sex?.trim() || undefined, email: row.email?.trim().toLowerCase() || undefined, courseName: row.courseName?.trim() || undefined, mother: importGuardian('mother'), father: importGuardian('father'), guardian: importGuardian('guardian') };
     });
     if (errors.length) throw new BadRequestException({ statusCode: 400, message: 'El archivo tiene filas con errores; no se importó nada', error: 'Bad Request', errors: errors.slice(0, 50) });
     return this.write(() => this.db.$transaction(async (tx) => {
-      await this.institutions.requireActiveMembership(actor, data.establishmentId, tx);
-      const courses = new Map((await tx.course.findMany({ where: { establishmentId: data.establishmentId, academicYear: data.academicYear } })).map((course) => [course.name.toLowerCase(), course.id]));
-      let createdCourses = 0; let created = 0; let updated = 0;
+      const establishmentId = data.establishmentId ?? await this.singleActiveEstablishmentId(tx);
+      const courses = new Map((await tx.course.findMany({ where: { establishmentId, academicYear: data.academicYear } })).map((course) => [course.name.toLowerCase(), course.id]));
+      let createdCourses = 0; let created = 0; let updated = 0; let guardiansCreated = 0; let guardiansUpdated = 0; let linksCreated = 0;
+      const guardiansWithoutRut = new Map<string, string>();
       for (const row of parsed) {
         let courseId: string | null = null;
         if (row.courseName) {
           const key = row.courseName.toLowerCase();
           courseId = courses.get(key) ?? null;
-          if (!courseId) { courseId = (await tx.course.create({ data: { establishmentId: data.establishmentId, name: row.courseName, academicYear: data.academicYear } })).id; courses.set(key, courseId); createdCourses += 1; }
+          if (!courseId) { courseId = (await tx.course.create({ data: { establishmentId, name: row.courseName, academicYear: data.academicYear } })).id; courses.set(key, courseId); createdCourses += 1; }
         }
         const rut = row.rut!;
-        const existing = await tx.student.findUnique({ where: { establishmentId_rut: { establishmentId: data.establishmentId, rut } } });
-        if (existing) { await tx.student.update({ where: { id: existing.id }, data: { firstNames: row.firstNames, lastNames: row.lastNames, ...(row.birthDate ? { birthDate: row.birthDate } : {}), ...(courseId ? { courseId } : {}), isActive: true, version: { increment: 1 } } }); updated += 1; }
-        else { await tx.student.create({ data: { establishmentId: data.establishmentId, rut, firstNames: row.firstNames, lastNames: row.lastNames, birthDate: row.birthDate, courseId } }); created += 1; }
+        const existing = await tx.student.findUnique({ where: { establishmentId_rut: { establishmentId, rut } } });
+        const student = existing
+          ? await tx.student.update({ where: { id: existing.id }, data: { firstNames: row.firstNames, lastNames: row.lastNames, ...(row.birthDate ? { birthDate: row.birthDate } : {}), ...(row.sex ? { sex: row.sex } : {}), ...(row.email ? { email: row.email } : {}), ...(courseId ? { courseId } : {}), isActive: true, version: { increment: 1 } } })
+          : await tx.student.create({ data: { establishmentId, rut, firstNames: row.firstNames, lastNames: row.lastNames, birthDate: row.birthDate, sex: row.sex ?? null, email: row.email ?? null, courseId } });
+        if (existing) updated += 1; else created += 1;
+
+        const links = new Map<string, { relationship: string; isPrimary: boolean }>();
+        for (const [role, contact] of [['MADRE', row.mother], ['PADRE', row.father], ['APODERADO/A', row.guardian]] as const) {
+          if (!contact) continue;
+          const noRutKey = !contact.rut && (contact.email || contact.phone) ? [contact.firstNames, contact.lastNames, contact.email ?? '', contact.phone ?? ''].map((value) => value.toLocaleLowerCase('es-CL')).join('\u0000') : null;
+          const cachedId = noRutKey ? guardiansWithoutRut.get(noRutKey) : undefined;
+          const current = contact.rut
+            ? await tx.guardian.findUnique({ where: { establishmentId_rut: { establishmentId, rut: contact.rut } } })
+            : cachedId
+              ? await tx.guardian.findUnique({ where: { id: cachedId } })
+              : noRutKey
+                ? await tx.guardian.findFirst({ where: { establishmentId, rut: null, firstNames: contact.firstNames, lastNames: contact.lastNames, email: contact.email ?? null, phone: contact.phone ?? null } })
+                : null;
+          const guardian = current
+            ? await tx.guardian.update({ where: { id: current.id }, data: { firstNames: contact.firstNames, lastNames: contact.lastNames, ...(contact.birthDate ? { birthDate: contact.birthDate } : {}), ...(contact.phone ? { phone: contact.phone } : {}), ...(contact.email ? { email: contact.email } : {}), ...(contact.address ? { address: contact.address } : {}), isActive: true, version: { increment: 1 } } })
+            : await tx.guardian.create({ data: { establishmentId, rut: contact.rut ?? null, firstNames: contact.firstNames, lastNames: contact.lastNames, birthDate: contact.birthDate ?? null, phone: contact.phone ?? null, email: contact.email ?? null, address: contact.address ?? null } });
+          if (current) guardiansUpdated += 1; else guardiansCreated += 1;
+          if (noRutKey) guardiansWithoutRut.set(noRutKey, guardian.id);
+          const previous = links.get(guardian.id);
+          links.set(guardian.id, { relationship: previous ? `${previous.relationship} Y ${role}` : role, isPrimary: previous?.isPrimary || role === 'APODERADO/A' });
+        }
+        for (const [guardianId, link] of links) {
+          if (link.isPrimary) await tx.studentGuardian.updateMany({ where: { studentId: student.id, guardianId: { not: guardianId } }, data: { isPrimary: false } });
+          const previous = await tx.studentGuardian.findUnique({ where: { studentId_guardianId: { studentId: student.id, guardianId } } });
+          await tx.studentGuardian.upsert({ where: { studentId_guardianId: { studentId: student.id, guardianId } }, update: link, create: { studentId: student.id, guardianId, ...link } });
+          if (!previous) linksCreated += 1;
+        }
       }
-      await this.record(tx, actor, 'STUDENTS_IMPORTED', 'ESTABLISHMENT', data.establishmentId, { created, updated, createdCourses }, ctx);
-      return { created, updated, createdCourses };
+      await this.record(tx, actor, 'STUDENTS_IMPORTED', 'ESTABLISHMENT', establishmentId, { created, updated, createdCourses, guardiansCreated, guardiansUpdated, linksCreated }, ctx);
+      return { created, updated, createdCourses, guardiansCreated, guardiansUpdated, linksCreated };
     }, { timeout: 60_000 }), 'Hay datos duplicados en la carga');
+  }
+
+  /** Plataforma institucional única: la carga usa el único establecimiento activo configurado. */
+  private async singleActiveEstablishmentId(tx: Tx) {
+    const establishments = await tx.establishment.findMany({
+      where: { isActive: true },
+      select: { id: true },
+      take: 2
+    });
+    if (establishments.length !== 1) throw new BadRequestException('La carga requiere que exista exactamente un establecimiento activo configurado.');
+    return establishments[0]!.id;
   }
 
   // ---- Apoderados ----
@@ -176,22 +235,22 @@ export class CommunityService {
     await this.institutions.requireActiveMembership(actor, guardian.establishmentId);
     return guardian;
   }
-  async createGuardian(actor: string, data: { establishmentId: string; rut?: string; firstNames: string; lastNames: string; email?: string; phone?: string }, ctx: AuditRequestContext) {
+  async createGuardian(actor: string, data: { establishmentId: string; rut?: string; firstNames: string; lastNames: string; birthDate?: string; address?: string; email?: string; phone?: string }, ctx: AuditRequestContext) {
     const rut = data.rut?.trim() ? this.requireRut(data.rut) : null;
     return this.write(() => this.db.$transaction(async (tx) => {
       await this.institutions.requireActiveMembership(actor, data.establishmentId, tx);
-      const guardian = await tx.guardian.create({ data: { establishmentId: data.establishmentId, rut, firstNames: data.firstNames.trim(), lastNames: data.lastNames.trim(), email: data.email?.trim().toLowerCase() || null, phone: data.phone?.trim() || null } });
+      const guardian = await tx.guardian.create({ data: { establishmentId: data.establishmentId, rut, firstNames: data.firstNames.trim(), lastNames: data.lastNames.trim(), birthDate: this.date(data.birthDate), address: data.address?.trim() || null, email: data.email?.trim().toLowerCase() || null, phone: data.phone?.trim() || null } });
       await this.record(tx, actor, 'GUARDIAN_CREATED', 'GUARDIAN', guardian.id, { establishmentId: data.establishmentId }, ctx);
       return guardian;
     }), 'Ya existe un apoderado con ese RUT en el establecimiento');
   }
-  async updateGuardian(actor: string, id: string, data: { expectedVersion: number; rut?: string | null; firstNames?: string; lastNames?: string; email?: string | null; phone?: string | null; isActive?: boolean }, ctx: AuditRequestContext) {
+  async updateGuardian(actor: string, id: string, data: { expectedVersion: number; rut?: string | null; firstNames?: string; lastNames?: string; birthDate?: string | null; address?: string | null; email?: string | null; phone?: string | null; isActive?: boolean }, ctx: AuditRequestContext) {
     const rut = data.rut === undefined ? undefined : data.rut === null || !data.rut.trim() ? null : this.requireRut(data.rut);
     return this.write(() => this.db.$transaction(async (tx) => {
       const current = await tx.guardian.findUnique({ where: { id } });
       if (!current) throw new NotFoundException('Apoderado no disponible');
       await this.institutions.requireActiveMembership(actor, current.establishmentId, tx);
-      const result = await tx.guardian.updateMany({ where: { id, version: data.expectedVersion }, data: { ...(rut === undefined ? {} : { rut }), ...(data.firstNames === undefined ? {} : { firstNames: data.firstNames.trim() }), ...(data.lastNames === undefined ? {} : { lastNames: data.lastNames.trim() }), ...(data.email === undefined ? {} : { email: data.email?.trim().toLowerCase() || null }), ...(data.phone === undefined ? {} : { phone: data.phone?.trim() || null }), ...(data.isActive === undefined ? {} : { isActive: data.isActive }), version: { increment: 1 } } });
+      const result = await tx.guardian.updateMany({ where: { id, version: data.expectedVersion }, data: { ...(rut === undefined ? {} : { rut }), ...(data.firstNames === undefined ? {} : { firstNames: data.firstNames.trim() }), ...(data.lastNames === undefined ? {} : { lastNames: data.lastNames.trim() }), ...(data.birthDate === undefined ? {} : { birthDate: data.birthDate === null ? null : this.date(data.birthDate) }), ...(data.address === undefined ? {} : { address: data.address?.trim() || null }), ...(data.email === undefined ? {} : { email: data.email?.trim().toLowerCase() || null }), ...(data.phone === undefined ? {} : { phone: data.phone?.trim() || null }), ...(data.isActive === undefined ? {} : { isActive: data.isActive }), version: { increment: 1 } } });
       if (result.count !== 1) throw new ConflictException('El apoderado fue modificado por otra persona');
       await this.record(tx, actor, 'GUARDIAN_UPDATED', 'GUARDIAN', id, { establishmentId: current.establishmentId, fields: Object.keys(data).filter((key) => key !== 'expectedVersion') }, ctx);
       return tx.guardian.findUniqueOrThrow({ where: { id } });

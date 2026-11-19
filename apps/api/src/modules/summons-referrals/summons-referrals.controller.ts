@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, ParseUUIDPipe, Post, Query, Req, StreamableFile, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
 import { ReferralStatus, SummonsStatus } from '@prisma/client';
 import { PageQueryDto } from '../../common/pagination';
 import { AdminRequest, CsrfGuard, PermissionsGuard, SessionGuard } from '../../common/security/admin-guards';
@@ -25,6 +25,10 @@ class UpdateSummonsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(2) @MaxLength(200) location?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(3) @MaxLength(1000) reason?: string;
   @ApiPropertyOptional({ description: 'Resultado de la reunión o motivo de cancelación' }) @IsOptional() @IsString() @MaxLength(2000) outcomeNote?: string;
+}
+class SendSummonsEmailDto {
+  @version() @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
+  @ApiProperty({ example: 'apoderado@establecimiento.cl' }) @IsEmail() @MaxLength(180) recipientEmail!: string;
 }
 class ListSummonsDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() establishmentId?: string;
@@ -64,6 +68,14 @@ export class SummonsReferralsController {
   createSummons(@Req() req: AdminRequest, @Param('caseId', ParseUUIDPipe) caseId: string, @Body() dto: CreateSummonsDto) { return this.service.createSummons(req.actorId!, caseId, { ...dto, scheduledAt: new Date(dto.scheduledAt) }, context(req)); }
   @Post('cases/:caseId/summons/:id/update') @RequirePermissions('summons.manage') @ApiOperation({ summary: 'Reprograma o cierra una citación (con control de versión)' })
   updateSummons(@Req() req: AdminRequest, @Param('caseId', ParseUUIDPipe) caseId: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSummonsDto) { return this.service.updateSummons(req.actorId!, caseId, id, { ...dto, scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined }, context(req)); }
+  @Get('cases/:caseId/summons/:id/letter') @RequirePermissions('summons.read') @ApiOperation({ summary: 'Descarga la carta PDF de una citación' })
+  @Header('Content-Type', 'application/pdf')
+  async summonsLetter(@Req() req: AdminRequest, @Param('caseId', ParseUUIDPipe) caseId: string, @Param('id', ParseUUIDPipe) id: string) {
+    const pdf = await this.service.summonsLetter(req.actorId!, caseId, id);
+    return new StreamableFile(pdf, { disposition: `attachment; filename="citacion-${id}.pdf"` });
+  }
+  @Post('cases/:caseId/summons/:id/send-email') @RequirePermissions('summons.manage') @ApiOperation({ summary: 'Envía la carta PDF de una citación al correo indicado' })
+  sendSummonsEmail(@Req() req: AdminRequest, @Param('caseId', ParseUUIDPipe) caseId: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SendSummonsEmailDto) { return this.service.sendSummonsEmail(req.actorId!, caseId, id, dto, context(req)); }
 
   @Get('referrals') @RequirePermissions('referrals.read') @ApiOperation({ summary: 'Derivaciones de los expedientes que la persona puede ver' })
   referrals(@Req() req: AdminRequest, @Query() q: ListReferralsDto) { return this.service.listReferrals(req.actorId!, q); }

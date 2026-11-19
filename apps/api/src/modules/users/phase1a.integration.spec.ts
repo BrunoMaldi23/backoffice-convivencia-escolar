@@ -35,6 +35,8 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     adminId = admin.id; ids.push(adminId);
     agent = request.agent(app.getHttpServer());
     await agent.post('/api/auth/login').send({ email: adminEmail, password: adminPassword }).expect(201);
+    const me = await agent.get('/api/auth/me').expect(200);
+    expect(me.body.user.permissions).toEqual(expect.arrayContaining(['users.read', 'users.create', 'users.update', 'users.disable', 'roles.assign']));
     csrf = (await agent.get('/api/auth/csrf').expect(200)).body.token as string;
   });
   afterAll(async () => {
@@ -75,6 +77,7 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     const created = await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email: employeeEmail.toUpperCase(), displayName: 'Empleado de prueba', roles: ['DOCENTE'], establishmentId }).expect(201);
     const id = created.body.id as string; ids.push(id);
     expect(created.body.isActive).toBe(false);
+    expect(created.body.invitationPending).toBe(true);
     expect(JSON.stringify(created.body)).not.toMatch(/passwordHash|tokenHash/);
     expect(await db!.establishmentMembership.findUnique({ where: { establishmentId_userId: { establishmentId, userId: id } } })).toMatchObject({ isActive: true });
     await agent.post('/api/users').set('X-CSRF-Token', csrf).send({ email: employeeEmail, displayName: 'Duplicado', roles: ['DOCENTE'], establishmentId }).expect(409);
@@ -82,7 +85,7 @@ describe('Fase 1A HTTP con PostgreSQL y Mailpit', () => {
     employeePassword = randomBytes(24).toString('base64url');
     await request(server()).post('/api/auth/accept-invitation').send({ token: code, password: employeePassword }).expect(201);
     await request(server()).post('/api/auth/accept-invitation').send({ token: code, password: randomBytes(24).toString('base64url') }).expect(400);
-    expect((await db!.user.findUniqueOrThrow({ where: { id } })).isActive).toBe(true);
+    expect(await db!.user.findUniqueOrThrow({ where: { id } })).toMatchObject({ isActive: true, invitationPending: false });
     const employee = request.agent(server());
     await employee.post('/api/auth/login').send({ email: employeeEmail, password: employeePassword }).expect(201);
     await employee.get('/api/users').expect(403);

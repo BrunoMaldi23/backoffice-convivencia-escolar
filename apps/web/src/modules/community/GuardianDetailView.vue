@@ -15,7 +15,7 @@ import { useGuardian } from '@/composables/useCommunity';
 import { useSession } from '@/composables/useSession';
 import { relationshipLabel } from '@/lib/catalogs';
 import { isNotFound } from '@/lib/errors';
-import { formatDate, fullName } from '@/lib/format';
+import { formatCalendarDate, formatDate, fullName } from '@/lib/format';
 import { formatRut } from '@/lib/rut';
 import GuardianFormDialog from './GuardianFormDialog.vue';
 
@@ -28,7 +28,7 @@ const editOpen = ref(false);
 const details = computed<DetailItem[]>(() => {
   const g = guardian.value;
   return g ? [
-    { key: 'rut', label: 'RUT', value: g.rut ? formatRut(g.rut) : '—' }, { key: 'phone', label: 'Teléfono', value: g.phone }, { key: 'email', label: 'Correo', value: g.email }, { key: 'created', label: 'Registrado el', value: formatDate(g.createdAt) }
+    { key: 'rut', label: 'RUT', value: g.rut ? formatRut(g.rut) : '—' }, { key: 'birth', label: 'Fecha de nacimiento', value: formatCalendarDate(g.birthDate) }, { key: 'address', label: 'Dirección', value: g.address ?? '—' }, { key: 'phone', label: 'Teléfono', value: g.phone ?? '—' }, { key: 'email', label: 'Correo', value: g.email ?? '—' }, { key: 'created', label: 'Registrado el', value: formatDate(g.createdAt) }
   ] : [];
 });
 const reload = () => { void query.refetch(); };

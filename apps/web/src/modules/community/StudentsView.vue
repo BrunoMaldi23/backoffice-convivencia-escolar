@@ -83,7 +83,7 @@ const emptyFresh = (items: Student[]) => items.length === 0 && !debounced.value 
 
     <template v-if="currentId">
       <StudentFormDialog v-model:visible="createOpen" :establishment-id="currentId" :student="null" @saved="(s) => router.push({ name: 'students-detail', params: { id: s.id } })" @reload="query.refetch()" />
-      <ImportStudentsDialog v-model:visible="importOpen" :establishment-id="currentId" />
+      <ImportStudentsDialog v-model:visible="importOpen" />
     </template>
   </div>
 </template>

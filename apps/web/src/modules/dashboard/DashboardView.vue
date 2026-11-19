@@ -13,48 +13,61 @@ import StatCard from '@/components/StatCard.vue';
 import Timeline from '@/components/Timeline.vue';
 import { useNotifications } from '@/composables/useNotifications';
 import { useSession } from '@/composables/useSession';
-import { useScopedInterviews, useScopedMeasures, useScopedTasks } from '@/composables/useScoped';
+import { useDashboardWorkItems } from '@/composables/useScoped';
+import { useReferralsList, useSummonsList } from '@/composables/useCaseActions';
 import { useAllCases } from '@/composables/useCases';
 import { categoryLabel, formatFolio } from '@/lib/catalogs';
 import { isForbidden } from '@/lib/errors';
 import { formatDate, formatDateTime, formatLongDate } from '@/lib/format';
-import { casesByMonth, collectDeadlines, computeCaseMetrics, isOverdueMeasure, isOverdueTask, isPendingMeasure, isPendingTask } from '@/lib/metrics';
+import { casesByMonth, collectDeadlines, computeCaseMetrics, isOverdueFollowUp, isOverdueMeasure, isOverdueTask, isPendingMeasure, isPendingTask } from '@/lib/metrics';
 import { statusOf } from '@/lib/status';
 import type { CaseRecord } from '@/types/api';
 
 /**
- * Panel de inicio con indicadores reales. Los datos de expedientes salen de `GET /cases`; tareas, medidas y entrevistas se
- * componen consultando los expedientes más recientes (la API no ofrece listados globales ni estadísticas). Cada tarjeta
- * indica su base cuando no cubre todos los expedientes. Las entrevistas "programadas" no existen en el modelo de la API:
- * solo hay entrevistas realizadas (borrador o finalizadas), por eso se informa cuántas están en borrador.
+ * Panel de inicio con indicadores reales y coherentes con cada flujo. Un caso "resuelto" espera el cierre formal y no se
+ * mezcla con los casos en gestión; "pendiente" se reserva para tareas, medidas, acciones de seguimiento y derivaciones.
  */
 const { can } = useSession();
 const canCases = computed(() => can('cases.read'));
 /** El rol debería poder leer expedientes (según la matriz inicial), pero el servidor lo negó: faltan permisos aplicados en el sistema. */
 const serverDenied = computed(() => canCases.value && isForbidden(cases.error.value));
 const cases = useAllCases(canCases);
-const tasks = useScopedTasks({ enabled: () => canCases.value && can('tasks.read') });
-const measures = useScopedMeasures({ enabled: () => canCases.value && can('measures.read') });
-const interviews = useScopedInterviews({ enabled: () => canCases.value && can('interviews.read') });
+/**
+ * Estos módulos no dependen del listado de expedientes. Iniciarlos junto con
+ * el resumen elimina una segunda tanda de solicitudes al abrir el panel.
+ */
+const secondaryReady = computed(() => canCases.value);
+const workItems = useDashboardWorkItems(secondaryReady);
+const tasks = computed(() => workItems.data.value?.tasks);
+const measures = computed(() => workItems.data.value?.measures);
+const followUps = computed(() => workItems.data.value?.followUps);
+const interviews = computed(() => workItems.data.value?.interviews);
+const summons = useSummonsList(() => ({ page: 1, limit: 6, status: 'PROGRAMADA' as const }), () => secondaryReady.value && can('summons.read'));
+const referrals = useReferralsList(() => ({ page: 1, limit: 1, status: 'PENDIENTE' as const }), () => secondaryReady.value && can('referrals.read'));
 const { unreadCount } = useNotifications();
 
 const now = new Date();
 const metrics = computed(() => (cases.data.value ? computeCaseMetrics(cases.data.value.items, now) : null));
-const scopeNote = (truncated?: boolean, scanned?: number) => (truncated ? `En los ${scanned} expedientes abiertos más recientes` : undefined);
+const scopeNote = (truncated?: boolean, scanned?: number) => (truncated ? `En los ${scanned} expedientes más recientes` : undefined);
 
 const stats = computed(() => {
   const m = metrics.value;
-  const taskRows = tasks.data.value?.rows ?? [];
-  const measureRows = measures.data.value?.rows ?? [];
-  const interviewRows = interviews.data.value?.rows ?? [];
+  const taskRows = tasks.value?.rows ?? [];
+  const measureRows = measures.value?.rows ?? [];
+  const followUpRows = followUps.value?.rows ?? [];
+  const interviewRows = interviews.value?.rows ?? [];
   return [
-    { label: 'Casos activos', icon: 'folder', value: m ? m.active.length : null, hint: 'No cerrados', to: '/casos' },
-    { label: 'Casos nuevos', icon: 'plus', value: m ? m.recentlyReceived : null, hint: 'Recibidos en 30 días', to: '/casos' },
+    { label: 'Casos en gestión', icon: 'folder', value: m ? m.inManagement.length : null, hint: 'Abiertos, en evaluación, proceso o pausa', to: '/casos' },
+    { label: 'Pendientes de evaluar', icon: 'plus', value: m ? m.byStatus.ABIERTO : null, hint: 'Casos recién ingresados', to: { path: '/casos', query: { estado: 'ABIERTO' } } },
     { label: 'Casos críticos', icon: 'alert-circle', value: m ? m.critical.length : null, hint: 'Activos de prioridad crítica', to: { path: '/casos', query: { prioridad: 'CRITICA' } }, emphasis: 'danger' as const },
+    { label: 'Resueltos por cerrar', icon: 'check-circle', value: m ? m.resolvedPendingClosure.length : null, hint: 'Requieren cierre formal', to: { path: '/casos', query: { estado: 'RESUELTO' } }, emphasis: 'warning' as const },
     { label: 'Casos cerrados', icon: 'check-circle', value: m ? m.closed : null, to: { path: '/casos', query: { estado: 'CERRADO' } } },
-    { label: 'Medidas pendientes', icon: 'shield', value: measures.data.value ? measureRows.filter((row) => isPendingMeasure(row.item)).length : null, hint: scopeNote(measures.data.value?.truncated, measures.data.value?.scanned), to: '/medidas', emphasis: 'warning' as const },
-    { label: 'Tareas vencidas', icon: 'clock', value: tasks.data.value ? taskRows.filter((row) => isOverdueTask(row.item, now)).length : null, hint: scopeNote(tasks.data.value?.truncated, tasks.data.value?.scanned), to: '/tareas', emphasis: 'danger' as const },
-    { label: 'Entrevistas en borrador', icon: 'message', value: interviews.data.value ? interviewRows.filter((row) => row.item.status === 'BORRADOR').length : null, hint: scopeNote(interviews.data.value?.truncated, interviews.data.value?.scanned), to: '/entrevistas' },
+    { label: 'Medidas pendientes', icon: 'shield', value: measures.value ? measureRows.filter((row) => isPendingMeasure(row.item)).length : null, hint: scopeNote(measures.value?.truncated, measures.value?.scanned), to: '/medidas', emphasis: 'warning' as const },
+    { label: 'Tareas vencidas', icon: 'clock', value: tasks.value ? taskRows.filter((row) => isOverdueTask(row.item)).length : null, hint: scopeNote(tasks.value?.truncated, tasks.value?.scanned), to: '/tareas', emphasis: 'danger' as const },
+    { label: 'Seguimientos vencidos', icon: 'activity', value: followUps.value ? followUpRows.filter((row) => isOverdueFollowUp(row.item, now)).length : null, hint: scopeNote(followUps.value?.truncated, followUps.value?.scanned), to: '/seguimientos', emphasis: 'danger' as const },
+    { label: 'Citaciones programadas', icon: 'mail', value: summons.data.value?.total ?? null, hint: 'Pendientes de realizar o cerrar', to: { path: '/citaciones', query: { estado: 'PROGRAMADA' } } },
+    { label: 'Derivaciones por enviar', icon: 'referral', value: referrals.data.value?.total ?? null, hint: 'Pendientes de envío', to: { path: '/derivaciones', query: { estado: 'PENDIENTE' } }, emphasis: 'warning' as const },
+    { label: 'Entrevistas en borrador', icon: 'message', value: interviews.value ? interviewRows.filter((row) => row.item.status === 'BORRADOR').length : null, hint: scopeNote(interviews.value?.truncated, interviews.value?.scanned), to: '/entrevistas' },
     { label: 'Acciones vencidas', icon: 'calendar', value: m ? m.overdueActions.length : null, hint: 'Próxima acción con plazo cumplido', to: '/calendario', emphasis: 'warning' as const }
   ];
 });
@@ -65,13 +78,17 @@ const monthChart = computed(() => (cases.data.value ? casesByMonth(cases.data.va
 const alerts = computed(() => {
   const list: { id: string; tone: 'danger' | 'warning' | 'info'; text: string; to: string }[] = [];
   const m = metrics.value;
-  const overdueTasks = (tasks.data.value?.rows ?? []).filter((row) => isOverdueTask(row.item, now)).length;
-  const overdueMeasures = (measures.data.value?.rows ?? []).filter((row) => isOverdueMeasure(row.item, now)).length;
-  const drafts = (interviews.data.value?.rows ?? []).filter((row) => row.item.status === 'BORRADOR').length;
+  const overdueTasks = (tasks.value?.rows ?? []).filter((row) => isOverdueTask(row.item, now)).length;
+  const overdueMeasures = (measures.value?.rows ?? []).filter((row) => isOverdueMeasure(row.item, now)).length;
+  const overdueFollowUps = (followUps.value?.rows ?? []).filter((row) => isOverdueFollowUp(row.item, now)).length;
+  const drafts = (interviews.value?.rows ?? []).filter((row) => row.item.status === 'BORRADOR').length;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   if (m?.critical.length) list.push({ id: 'critical', tone: 'danger', text: `${plural(m.critical.length, 'caso crítico activo', 'casos críticos activos')}.`, to: '/casos?prioridad=CRITICA' });
   if (overdueTasks) list.push({ id: 'tasks', tone: 'danger', text: `${plural(overdueTasks, 'tarea vencida', 'tareas vencidas')}.`, to: '/tareas' });
   if (overdueMeasures) list.push({ id: 'measures', tone: 'warning', text: `${plural(overdueMeasures, 'medida de resguardo con plazo vencido', 'medidas de resguardo con plazo vencido')}.`, to: '/medidas' });
+  if (overdueFollowUps) list.push({ id: 'followups', tone: 'warning', text: `${plural(overdueFollowUps, 'seguimiento con próxima acción vencida', 'seguimientos con próxima acción vencida')}.`, to: '/seguimientos' });
+  if (summons.data.value?.total) list.push({ id: 'summons', tone: 'info', text: `${plural(summons.data.value.total, 'citación programada pendiente de cierre', 'citaciones programadas pendientes de cierre')}.`, to: '/citaciones?estado=PROGRAMADA' });
+  if (referrals.data.value?.total) list.push({ id: 'referrals', tone: 'warning', text: `${plural(referrals.data.value.total, 'derivación pendiente de envío', 'derivaciones pendientes de envío')}.`, to: '/derivaciones?estado=PENDIENTE' });
   if (m?.overdueActions.length) list.push({ id: 'actions', tone: 'warning', text: `${plural(m.overdueActions.length, 'expediente con la próxima acción vencida', 'expedientes con la próxima acción vencida')}.`, to: '/calendario' });
   if (drafts) list.push({ id: 'drafts', tone: 'info', text: `${plural(drafts, 'entrevista sin finalizar', 'entrevistas sin finalizar')}.`, to: '/entrevistas' });
   if (unreadCount.value) list.push({ id: 'notifications', tone: 'info', text: `${plural(unreadCount.value, 'notificación sin leer', 'notificaciones sin leer')}.`, to: '/notificaciones' });
@@ -80,13 +97,14 @@ const alerts = computed(() => {
 const alertIcon = { danger: 'alert-circle', warning: 'alert-triangle', info: 'info' } as const;
 const alertClass = { danger: 'text-red-700', warning: 'text-amber-700', info: 'text-sky-700' } as const;
 
-const priorityTasks = computed(() => (tasks.data.value?.rows ?? []).filter((row) => isPendingTask(row.item))
+const priorityTasks = computed(() => (tasks.value?.rows ?? []).filter((row) => isPendingTask(row.item))
   .sort((a, b) => (a.item.dueAt ?? '9999').localeCompare(b.item.dueAt ?? '9999')).slice(0, 5));
 const upcoming = computed(() => collectDeadlines({
   cases: cases.data.value?.items ?? [],
-  tasks: (tasks.data.value?.rows ?? []).map((row) => ({ caseId: row.case.id, item: row.item })),
-  measures: (measures.data.value?.rows ?? []).map((row) => ({ caseId: row.case.id, item: row.item })),
-  followUps: []
+  tasks: (tasks.value?.rows ?? []).map((row) => ({ caseId: row.case.id, item: row.item })),
+  measures: (measures.value?.rows ?? []).map((row) => ({ caseId: row.case.id, item: row.item })),
+  followUps: (followUps.value?.rows ?? []).map((row) => ({ caseId: row.case.id, item: row.item })),
+  summons: (summons.data.value?.items ?? []).map((item) => ({ caseId: item.caseId, item }))
 }, now).filter((deadline) => !deadline.overdue).slice(0, 6));
 const caseOf = (id: string): CaseRecord | undefined => cases.data.value?.items.find((record) => record.id === id);
 const activity = computed(() => (metrics.value?.recent ?? []).map((record) => ({
@@ -166,7 +184,7 @@ const activity = computed(() => (metrics.value?.recent ?? []).map((record) => ({
         <SectionCard dense title="Tareas prioritarias" description="Pendientes ordenadas por vencimiento." flush>
           <template #actions><RouterLink to="/tareas" class="rounded text-sm font-medium text-sky-700 hover:underline">Ver tareas</RouterLink></template>
           <p v-if="!can('tasks.read')" class="px-4 py-6 text-center text-sm text-slate-600">Su rol no incluye el acceso a tareas.</p>
-          <QueryState v-else :data="tasks.data.value ? priorityTasks : undefined" :is-pending="tasks.isPending.value" :error="tasks.error.value" compact :rows="3" empty-title="Sin tareas pendientes" empty-icon="check-circle" subject="las tareas" @retry="tasks.refetch()">
+          <QueryState v-else :data="tasks ? priorityTasks : undefined" :is-pending="workItems.isPending.value" :error="workItems.error.value" compact :rows="3" empty-title="Sin tareas pendientes" empty-icon="check-circle" subject="las tareas" @retry="workItems.refetch()">
             <template #default="{ data }">
               <ul class="divide-y divide-slate-100">
                 <li v-for="row in data" :key="row.item.id">
@@ -186,7 +204,7 @@ const activity = computed(() => (metrics.value?.recent ?? []).map((record) => ({
           </QueryState>
         </SectionCard>
 
-        <SectionCard dense title="Próximas actividades" description="Plazos de tareas, medidas y próximas acciones." flush>
+        <SectionCard dense title="Próximas actividades" description="Plazos, próximas acciones y citaciones programadas." flush>
           <template #actions><RouterLink to="/calendario" class="rounded text-sm font-medium text-sky-700 hover:underline">Ver calendario</RouterLink></template>
           <QueryState :data="cases.data.value ? upcoming : undefined" :is-pending="cases.isPending.value" :error="cases.error.value" compact :rows="3" empty-title="Sin plazos próximos" empty-icon="calendar" subject="los plazos" @retry="cases.refetch()">
             <template #default="{ data }">

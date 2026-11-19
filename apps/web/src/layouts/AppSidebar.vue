@@ -5,6 +5,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import InstitutionLogo from '@/components/InstitutionLogo.vue';
 import { useSession } from '@/composables/useSession';
 import { NAVIGATION, type NavItem } from '@/router/navigation';
+import { preloadRoute } from '@/router/preload';
 
 /** `rail` muestra solo íconos (tablet plegada). En móvil el mismo componente vive dentro de un Drawer. */
 const props = withDefaults(defineProps<{ rail?: boolean }>(), { rail: false });
@@ -20,6 +21,9 @@ const linkClass = (item: NavItem) => [
   props.rail ? 'h-10 w-10 justify-center' : 'px-3 py-2',
   isActive(item) ? 'bg-sky-50 font-semibold text-sky-800' : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900'
 ];
+const preload = (item: NavItem) => {
+  preloadRoute(item.to);
+};
 </script>
 
 <template>
@@ -39,7 +43,7 @@ const linkClass = (item: NavItem) => [
           <li v-for="item in group.items" :key="item.to">
             <RouterLink
               :to="item.to" :class="linkClass(item)" :aria-current="isActive(item) ? 'page' : undefined"
-              :aria-label="rail ? `${item.label}${item.pending ? ' (pendiente)' : ''}` : undefined" :title="rail ? item.label : undefined" @click="emit('navigate')"
+              :aria-label="rail ? `${item.label}${item.pending ? ' (pendiente)' : ''}` : undefined" :title="rail ? item.label : undefined" @mouseenter="preload(item)" @focus="preload(item)" @click="emit('navigate')"
             >
               <AppIcon :name="item.icon" :size="18" :class="isActive(item) ? 'text-sky-700' : 'text-slate-500 group-hover:text-slate-700'" />
               <template v-if="!rail">

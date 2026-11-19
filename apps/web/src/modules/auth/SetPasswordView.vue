@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { isAxiosError } from 'axios';
 import Button from 'primevue/button';
-import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import AppIcon from '@/components/AppIcon.vue';
 import FormField from '@/components/FormField.vue';
@@ -15,19 +14,18 @@ import PasswordInput from './PasswordInput.vue';
 
 /**
  * Restablecer contraseña (`reset`) o activar cuenta por invitación (`invite`).
- * Según el contrato, el código llega por correo separado de la URL y se pega aquí: nunca se lee
- * desde la ruta ni se guarda en el navegador. Mínimo de 12 caracteres definido por el backend.
+ * Supabase Auth entrega un enlace temporal; el token se mantiene sólo en memoria del cliente.
  */
 const props = defineProps<{ mode: 'reset' | 'invite' }>();
 const MIN = 12;
 const copy = computed(() => props.mode === 'invite'
-  ? { title: 'Activar cuenta', intro: 'Pegue el código de invitación que recibió por correo y cree su contraseña.', submit: 'Activar cuenta', done: 'Su cuenta está activa. Ya puede iniciar sesión.' }
-  : { title: 'Restablecer contraseña', intro: 'Pegue el código que recibió por correo y cree una nueva contraseña.', submit: 'Guardar contraseña', done: 'Su contraseña fue actualizada y se cerraron sus otras sesiones.' });
+  ? { title: 'Activar cuenta', intro: 'Cree su contraseña para activar la cuenta.', submit: 'Activar cuenta', done: 'Su cuenta está activa. Ya puede iniciar sesión.' }
+  : { title: 'Restablecer contraseña', intro: 'Cree una nueva contraseña para su cuenta.', submit: 'Guardar contraseña', done: 'Su contraseña fue actualizada.' });
 
 const reset = useResetPassword();
 const accept = useAcceptInvitation();
 const mutation = computed(() => (props.mode === 'invite' ? accept : reset));
-const form = reactive({ token: '', password: '', confirm: '' });
+const form = reactive({ password: '', confirm: '' });
 const errors = ref<Partial<Record<keyof typeof form, string>>>({});
 
 /** Código inválido, vencido o ya usado responde 400/401: se explica cómo obtener uno nuevo. */
@@ -49,18 +47,17 @@ const checks = computed(() => [
 
 function submit() {
   errors.value = validateAll(form, {
-    token: [required('Pegue el código recibido por correo.'), minLength(32, 'El código está incompleto. Cópielo completo desde el correo.')],
     password: [required('Ingrese una contraseña nueva.'), minLength(MIN)],
     confirm: [required('Repita la contraseña nueva.')]
   });
   if (!errors.value.confirm && form.confirm !== form.password) errors.value.confirm = 'Las contraseñas no coinciden.';
-  const first = (['token', 'password', 'confirm'] as const).find((k) => errors.value[k]);
+  const first = (['password', 'confirm'] as const).find((k) => errors.value[k]);
   if (first) return document.getElementById(`set-${first}`)?.focus();
   if (mutation.value.isPending.value) return;
-  mutation.value.mutate({ token: form.token.trim(), password: form.password }, { onSuccess: () => Object.assign(form, { token: '', password: '', confirm: '' }) });
+  mutation.value.mutate({ password: form.password }, { onSuccess: () => Object.assign(form, { password: '', confirm: '' }) });
 }
 
-onBeforeUnmount(() => Object.assign(form, { token: '', password: '', confirm: '' }));
+onBeforeUnmount(() => Object.assign(form, { password: '', confirm: '' }));
 </script>
 
 <template>
@@ -79,11 +76,6 @@ onBeforeUnmount(() => Object.assign(form, { token: '', password: '', confirm: ''
     </template>
 
     <form v-else novalidate class="mt-6 space-y-5" @submit.prevent="submit">
-      <FormField id="set-token" label="Código recibido por correo" :error="errors.token" help="Vigente por 30 minutos y válido para un solo uso.">
-        <template #default="{ id, invalid, describedby }">
-          <InputText :id="id" v-model="form.token" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" :invalid="invalid" :aria-describedby="describedby" class="w-full font-mono text-sm" />
-        </template>
-      </FormField>
       <FormField id="set-password" label="Contraseña nueva" :error="errors.password">
         <template #default="{ id, invalid, describedby }">
           <PasswordInput :id="id" v-model="form.password" :invalid="invalid" :describedby="describedby ? `${describedby} set-rules` : 'set-rules'" autocomplete="new-password" />

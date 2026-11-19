@@ -9,7 +9,7 @@
  */
 const ALL_PERMISSIONS = [
   'dashboard.read', 'users.read', 'users.create', 'users.update', 'users.disable', 'roles.read', 'roles.assign', 'audit.read', 'cases.read', 'cases.create',
-  'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'institutions.read', 'institutions.manage',
+  'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'cases.archive', 'cases.delete', 'institutions.read', 'institutions.manage',
   'case-grants.manage', 'reports.read', 'reports.create', 'reports.update', 'participants.read', 'participants.manage', 'interviews.read', 'interviews.create',
   'interviews.update', 'interviews.finalize', 'interviews.correct', 'documents.read', 'documents.create', 'protocols.read', 'protocols.manage', 'measures.read',
   'measures.manage', 'follow-ups.read', 'follow-ups.create', 'tasks.read', 'tasks.manage', 'notifications.read', 'courses.read', 'courses.manage', 'students.read',
@@ -23,7 +23,7 @@ export const ROLE_PERMISSION_HINTS: Record<string, readonly string[]> = {
   SYSTEM_ADMIN: ALL_PERMISSIONS,
   DIRECTOR: ['dashboard.read', 'users.read', 'roles.read', 'audit.read', ...DIRECTORY_READ],
   CONVIVENCIA: [
-    'dashboard.read', 'cases.read', 'cases.create', 'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'reports.read',
+    'dashboard.read', 'cases.read', 'cases.create', 'cases.update', 'cases.assign', 'cases.transition', 'cases.close', 'cases.reopen', 'cases.timeline.read', 'cases.archive', 'reports.read',
     'reports.create', 'reports.update', 'participants.read', 'participants.manage', 'interviews.read', 'interviews.create', 'interviews.update', 'interviews.finalize',
     'interviews.correct', 'documents.read', 'documents.create', 'protocols.read', 'protocols.manage', 'measures.read', 'measures.manage', 'follow-ups.read',
     'follow-ups.create', 'tasks.read', 'tasks.manage', 'notifications.read', 'courses.read', 'courses.manage', 'students.read', 'students.manage', 'guardians.read', 'guardians.manage',

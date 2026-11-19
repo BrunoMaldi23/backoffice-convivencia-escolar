@@ -113,9 +113,9 @@ describe('Comunidad educativa, citaciones y derivaciones HTTP con PostgreSQL', (
     expect(bad.body.errors.map((e: { row: number }) => e.row)).toEqual(expect.arrayContaining([4, 5]));
     expect((await agent.get('/api/students').query({ establishmentId, search: 'Peña' }).expect(200)).body.total).toBe(0);
     const ok = await post('students/import', { establishmentId, academicYear: 2026, rows }).expect(201);
-    expect(ok.body).toEqual({ created: 3, updated: 0, createdCourses: 1 });
+    expect(ok.body).toEqual({ created: 3, updated: 0, createdCourses: 1, guardiansCreated: 0, guardiansUpdated: 0, linksCreated: 0 });
     const again = await post('students/import', { establishmentId, academicYear: 2026, rows: [{ ...rows[0]!, lastNames: 'Peña Díaz' }] }).expect(201);
-    expect(again.body).toEqual({ created: 0, updated: 1, createdCourses: 0 });
+    expect(again.body).toEqual({ created: 0, updated: 1, createdCourses: 0, guardiansCreated: 0, guardiansUpdated: 0, linksCreated: 0 });
     expect((await agent.get('/api/students').query({ establishmentId, search: 'Peña Díaz' }).expect(200)).body.total).toBe(1);
   });
 

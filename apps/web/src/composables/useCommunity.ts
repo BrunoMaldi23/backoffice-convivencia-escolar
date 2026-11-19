@@ -33,7 +33,7 @@ export const useUpdateCourse = () => useApiMutation((input: { id: string } & Par
 
 export const useCreateStudent = () => useApiMutation((input: Parameters<typeof community.createStudent>[0]) => community.createStudent(input), () => WITH_AUDIT);
 export const useUpdateStudent = () => useApiMutation((input: { id: string } & Parameters<typeof community.updateStudent>[1]) => { const { id, ...body } = input; return community.updateStudent(id, body); }, () => WITH_AUDIT);
-export const useImportStudents = () => useApiMutation((input: { establishmentId: string; academicYear: number; rows: ImportStudentRow[] }) => community.importStudents(input), () => WITH_AUDIT);
+export const useImportStudents = () => useApiMutation((input: { academicYear: number; rows: ImportStudentRow[] }) => community.importStudents(input), () => WITH_AUDIT);
 export const useLinkStudentGuardian = () => useApiMutation((input: { studentId: string; guardianId: string; relationship: string; isPrimary: boolean }) => { const { studentId, ...body } = input; return community.linkStudentGuardian(studentId, body); }, () => WITH_AUDIT);
 export const useUnlinkStudentGuardian = () => useApiMutation((input: { studentId: string; guardianId: string }) => community.unlinkStudentGuardian(input.studentId, input.guardianId), () => WITH_AUDIT);
 

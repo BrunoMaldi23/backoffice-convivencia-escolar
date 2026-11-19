@@ -10,7 +10,7 @@ import { useDirectory } from '@/composables/useDirectory';
  */
 const props = withDefaults(defineProps<{ id: string; invalid?: boolean; describedby?: string; placeholder?: string; showClear?: boolean; allActiveUsers?: boolean }>(), { invalid: false, describedby: undefined, placeholder: 'Seleccione una persona', showClear: false, allActiveUsers: false });
 const model = defineModel<string | null>({ default: null });
-const { available, options, activeUserOptions, query } = useDirectory();
+const { available, options, activeUserOptions, query } = useDirectory({ includeAllUsers: () => props.allActiveUsers });
 const selectableOptions = computed(() => props.allActiveUsers && activeUserOptions.value.length ? activeUserOptions.value : options.value);
 const text = computed({ get: () => model.value ?? '', set: (value: string) => { model.value = value.trim() || null; } });
 </script>

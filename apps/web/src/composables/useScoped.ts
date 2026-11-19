@@ -1,24 +1,19 @@
 import { computed, type MaybeRefOrGetter } from 'vue';
-import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { mapLimit } from '@/lib/async';
-import { httpStatus } from '@/lib/errors';
-import * as cases from '@/services/cases';
+import { useQuery } from '@tanstack/vue-query';
 import * as ops from '@/services/caseOperations';
 import type { CaseDocument, CaseFollowUp, CaseMeasure, CaseRecord, CaseReport, CaseTask, Interview } from '@/types/api';
-import { fetchAllCases } from './useCases';
 
 /**
  * Vistas globales (tareas, medidas, seguimientos, entrevistas, denuncias, documentos y calendario).
  *
- * La API solo entrega estos datos por expediente (`/cases/:id/...`) y no ofrece listados globales. Por eso se consultan los
- * expedientes autorizados más recientemente actualizados y, de cada uno, su contenido, con pocas llamadas simultáneas. Es una
- * composición de endpoints reales y autorizados, no una estimación; el resultado indica cuántos expedientes se revisaron
- * (`scanned` de `eligible`) para que ninguna cifra parezca más completa de lo que es. Ver docs/frontend/api-integration.md.
+ * La API entrega un listado global por tipo y aplica la misma autorización
+ * contextual que en cada expediente. Así cada vista requiere una solicitud,
+ * no una solicitud por cada caso visible.
  */
-export const SCOPE_CASE_LIMIT = 60;
-const CONCURRENCY = 5;
 
-export interface ScopedRow<T> { case: CaseRecord; item: T }
+/** Resumen del expediente que acompaña a un ítem global. La API no transmite el expediente completo por cada fila. */
+export type ScopedCase = Pick<CaseRecord, 'id' | 'folio' | 'title' | 'status'>;
+export interface ScopedRow<T> { case: ScopedCase; item: T }
 export interface ScopedResult<T> {
   rows: ScopedRow<T>[];
   /** Expedientes revisados. */
@@ -32,35 +27,26 @@ export interface ScopedResult<T> {
 
 export interface ScopedOptions { includeClosed?: boolean; enabled?: MaybeRefOrGetter<boolean> }
 
-/** Revisa el contenido de los expedientes elegibles (los más recientes primero) con la función `fetcher`. */
-export async function scanCases<T>(all: { items: CaseRecord[]; total: number; truncated: boolean }, fetcher: (caseId: string) => Promise<T[]>, options: { includeClosed?: boolean } = {}): Promise<ScopedResult<T>> {
-  const eligibleCases = all.items.filter((c) => options.includeClosed || c.status !== 'CERRADO');
-  const selected = eligibleCases.slice(0, SCOPE_CASE_LIMIT);
-  const parts = await mapLimit(selected, CONCURRENCY, async (record) => {
-    try {
-      return (await fetcher(record.id)).map((item): ScopedRow<T> => ({ case: record, item }));
-    } catch (error) {
-      // Sin permiso sobre el recurso: se propaga para mostrarlo como acceso denegado. Un 404 aislado se omite.
-      if (httpStatus(error) === 404) return [];
-      throw error;
-    }
-  });
-  return { rows: parts.flat(), scanned: selected.length, eligible: eligibleCases.length, totalCases: all.total, truncated: all.truncated || eligibleCases.length > selected.length };
-}
-
-export function useScoped<T>(kind: string, fetcher: (caseId: string) => Promise<T[]>, options: ScopedOptions = {}) {
-  const client = useQueryClient();
+export function useScoped<T>(kind: string, options: ScopedOptions = {}) {
+  const globalFetchers: Record<string, (includeClosed: boolean, options?: { signal?: AbortSignal }) => Promise<ScopedResult<unknown>>> = {
+    tasks: ops.listGlobalTasks, measures: ops.listGlobalMeasures, 'follow-ups': ops.listGlobalFollowUps,
+    interviews: ops.listGlobalInterviews, reports: ops.listGlobalReports, documents: ops.listGlobalDocuments
+  };
   return useQuery({
     queryKey: computed(() => ['scoped', kind, Boolean(options.includeClosed)]),
     enabled: options.enabled ?? true,
-    staleTime: 30_000,
-    queryFn: async (): Promise<ScopedResult<T>> => scanCases(await client.fetchQuery({ queryKey: ['cases', 'all'], queryFn: fetchAllCases, staleTime: 30_000 }), fetcher, options)
+    staleTime: 2 * 60_000,
+    queryFn: ({ signal }) => globalFetchers[kind]!(Boolean(options.includeClosed), { signal }) as Promise<ScopedResult<T>>
   });
 }
 
-export const useScopedTasks = (options?: ScopedOptions) => useScoped<CaseTask>('tasks', ops.listTasks, options);
-export const useScopedMeasures = (options?: ScopedOptions) => useScoped<CaseMeasure>('measures', ops.listMeasures, options);
-export const useScopedFollowUps = (options?: ScopedOptions) => useScoped<CaseFollowUp>('follow-ups', ops.listFollowUps, options);
-export const useScopedInterviews = (options?: ScopedOptions) => useScoped<Interview>('interviews', cases.listInterviews, options);
-export const useScopedReports = (options?: ScopedOptions) => useScoped<CaseReport>('reports', cases.listReports, options);
-export const useScopedDocuments = (options?: ScopedOptions) => useScoped<CaseDocument>('documents', ops.listDocuments, options);
+export const useScopedTasks = (options?: ScopedOptions) => useScoped<CaseTask>('tasks', options);
+export const useScopedMeasures = (options?: ScopedOptions) => useScoped<CaseMeasure>('measures', options);
+export const useScopedFollowUps = (options?: ScopedOptions) => useScoped<CaseFollowUp>('follow-ups', options);
+export const useScopedInterviews = (options?: ScopedOptions) => useScoped<Interview>('interviews', options);
+export const useScopedReports = (options?: ScopedOptions) => useScoped<CaseReport>('reports', options);
+export const useScopedDocuments = (options?: ScopedOptions) => useScoped<CaseDocument>('documents', options);
+
+/** Resumen de trabajo del inicio: una solicitud para sus módulos pesados. */
+export const useDashboardWorkItems = (enabled: MaybeRefOrGetter<boolean> = true) =>
+  useQuery({ queryKey: ['dashboard', 'work-items'], queryFn: ({ signal }) => ops.getDashboardWorkItems({ signal }), enabled, staleTime: 2 * 60_000 });

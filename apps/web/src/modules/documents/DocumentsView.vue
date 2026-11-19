@@ -85,11 +85,12 @@ async function download(row: Row) {
             <template #cell-originalFilename="{ row }"><span class="block max-w-[14rem] truncate font-medium sm:max-w-xs" :title="row.originalFilename">{{ row.originalFilename }}</span></template>
             <template #cell-case="{ row }"><span class="tabular-nums">{{ formatFolio(row.case.folio) }}</span></template>
             <template #cell-kind="{ row }"><StatusBadge :status="row.kind" /></template>
-            <template #cell-sizeBytes="{ row }"><span class="whitespace-nowrap tabular-nums">{{ formatBytes(row.sizeBytes) }}</span></template>
+            <template #cell-sizeBytes="{ row }"><span class="whitespace-nowrap tabular-nums">{{ row.externalUrl ? 'Enlace' : formatBytes(row.sizeBytes) }}</span></template>
             <template #cell-uploadedByUserId="{ row }">{{ nameOf(row.uploadedByUserId, 'Persona no disponible') }}</template>
             <template #cell-createdAt="{ row }"><span class="whitespace-nowrap tabular-nums">{{ formatDateTime(row.createdAt) }}</span></template>
             <template #actions="{ row }">
-              <Button size="small" severity="secondary" text :loading="downloading === row.id" :aria-label="`Descargar ${row.originalFilename}`" :title="`Descargar ${row.originalFilename}`" @click="download(row)"><template #icon><AppIcon name="download" :size="17" /></template></Button>
+              <a v-if="row.externalUrl" :href="row.externalUrl" target="_blank" rel="noopener noreferrer" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-sky-800 hover:bg-sky-50" :aria-label="`Abrir video: ${row.originalFilename}`" title="Abrir video"><AppIcon name="eye" :size="17" /></a>
+              <Button v-else size="small" severity="secondary" text :loading="downloading === row.id" :aria-label="`Descargar ${row.originalFilename}`" :title="`Descargar ${row.originalFilename}`" @click="download(row)"><template #icon><AppIcon name="download" :size="17" /></template></Button>
               <template v-if="canAct(row)">
                 <Button size="small" severity="secondary" text aria-label="Anular documento (se conserva en la trazabilidad)" title="Anular documento (se conserva en la trazabilidad)" @click="askVoid(row)"><template #icon><AppIcon name="ban" :size="16" /></template></Button>
                 <Button size="small" severity="danger" text aria-label="Eliminar documento definitivamente" title="Eliminar documento definitivamente" @click="deleteTarget = row"><template #icon><AppIcon name="trash" :size="16" /></template></Button>

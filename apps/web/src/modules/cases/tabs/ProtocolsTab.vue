@@ -33,6 +33,7 @@ const open = computed({ get: () => Boolean(target.value), set: (v: boolean) => {
 const applicationFor = (versionId: string) => applications.data.value?.find((item) => item.protocolVersionId === versionId) ?? null;
 const activeApplicationFor = (versionId: string) => applicationFor(versionId)?.revokedAt ? null : applicationFor(versionId);
 const published = (template: ProtocolTemplate) => template.versions.filter((v) => v.status === 'PUBLICADO');
+const available = (template: ProtocolTemplate) => !template.categoryCodes.length || template.categoryCodes.includes(props.caseRecord.categoryCode);
 const revokeTarget = ref<ProtocolApplication | null>(null);
 const revokeOpen = computed({ get: () => Boolean(revokeTarget.value), set: (value: boolean) => { if (!value) revokeTarget.value = null; } });
 const revokeForm = reactive({ reason: '' });
@@ -43,7 +44,7 @@ async function submitRevoke() { if (!revokeTarget.value || revokeForm.reason.tri
 <template>
   <SectionCard dense title="Protocolos" description="Protocolos publicados que pueden aplicarse a este expediente.">
     <QueryState
-      :data="protocols.data.value?.filter((t) => published(t).length)" :is-pending="protocols.isPending.value" :error="protocols.error.value" compact
+      :data="protocols.data.value?.filter((t) => available(t) && published(t).length)" :is-pending="protocols.isPending.value" :error="protocols.error.value" compact
       empty-title="No hay protocolos publicados" empty-description="Un protocolo debe publicarse en el catálogo institucional antes de poder aplicarse." empty-icon="list-checks" subject="los protocolos" @retry="protocols.refetch()"
     >
       <template #default="{ data }">

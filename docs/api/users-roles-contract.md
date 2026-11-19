@@ -1,6 +1,6 @@
 # Usuarios, roles y permisos
 
-Todas las rutas requieren `bce_session`; las escrituras también `X-CSRF-Token`. IDs son UUID. Respuesta de usuario: `{id,email,displayName,isActive,createdAt,updatedAt,roles:string[]}`. Nunca contiene `passwordHash`, cookies ni tokens. Fechas JSON ISO 8601.
+Todas las rutas requieren `bce_session`; las escrituras también `X-CSRF-Token`. IDs son UUID. Respuesta de usuario: `{id,email,displayName,isActive,invitationPending,createdAt,updatedAt,roles:string[]}`. Nunca contiene `passwordHash`, cookies ni tokens. Fechas JSON ISO 8601.
 
 | Método y ruta | Permiso | Entrada / respuesta |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ Todas las rutas requieren `bce_session`; las escrituras también `X-CSRF-Token`.
 | GET `/api/roles/:id` | `roles.read` | Rol o 404 |
 | GET `/api/permissions` | `roles.read` | Lista `{id,code,description}` |
 
-La creación no recibe contraseña: en una sola transacción crea la cuenta, sus roles, la membresía activa del establecimiento indicado y el código de invitación. El funcionario establece su contraseña con el código recibido por correo; el administrador no ve ese código. Si el establecimiento no existe o está inactivo, no se crea la cuenta. Una cuenta con invitación pendiente no puede activarse por el endpoint de estado. `SYSTEM_ADMIN` no puede autoasignarse y solo un administrador activo puede concederlo a otra cuenta. Los cambios de rol revocan sesiones. El último administrador activo no puede desactivarse ni perder ese rol; la operación responde 409. No existe DELETE.
+La creación no recibe contraseña: en una sola transacción crea la cuenta, sus roles, la membresía activa del establecimiento indicado y el código de invitación. El funcionario establece su contraseña con el código recibido por correo; el administrador no ve ese código. Si el establecimiento no existe o está inactivo, no se crea la cuenta. `invitationPending:true` identifica una cuenta que aún debe aceptar la invitación; solo en ese estado se puede usar `resend-invitation` y no se puede activar manualmente. Al desactivar una cuenta pendiente o aceptar la invitación, el indicador pasa a `false`; una cuenta inactiva con `invitationPending:false` se puede reactivar. `SYSTEM_ADMIN` no puede autoasignarse y solo un administrador activo puede concederlo a otra cuenta. Los cambios de rol revocan sesiones. El último administrador activo no puede desactivarse ni perder ese rol; la operación responde 409. No existe DELETE.
 
 Matriz inicial: `SYSTEM_ADMIN` tiene los ocho permisos administrativos listados abajo; `DIRECTOR` tiene `dashboard.read`, `users.read`, `roles.read`, `audit.read`; `AUDITOR` tiene `dashboard.read` y `audit.read`; los demás roles tienen solo `dashboard.read`. El seed no reasigna permisos después de su primera ejecución. Ningún rol obtiene acceso automático a expedientes futuros.
 

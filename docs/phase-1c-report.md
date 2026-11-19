@@ -2,7 +2,7 @@
 
 Fecha: 2026-10-23 (America/Santiago).
 
-**ESTADO: COMPLETADA** en backend y frontend, con las pruebas descritas abajo. Quedan fuera, y documentados como pendientes, la generación de cartas de citación y el envío de correos a apoderados.
+**ESTADO: COMPLETADA** en backend y frontend, con las pruebas descritas abajo. La carta PDF de citación y el envío SMTP explícito al apoderado fueron incorporados posteriormente; requieren configuración y prueba institucional antes de datos reales.
 
 ## 1. Qué se agregó
 
@@ -54,7 +54,5 @@ Se aplicó la migración nueva a la base `convivencia` al reiniciar el contenedo
 
 ## 6. Pendientes conocidos
 
-- Carta de citación en PDF y notificación por correo al apoderado.
 - Catálogos oficiales (vínculo familiar, tipo de institución) definidos por el establecimiento.
-- Indicadores de citaciones y derivaciones en el panel y el calendario.
 - Los pendientes anteriores de [api-integration.md](frontend/api-integration.md) (límite de cuerpo de 100 KB para documentos, permisos efectivos en `/auth/me`, etc.).

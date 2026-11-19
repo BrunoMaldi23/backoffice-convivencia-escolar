@@ -7,13 +7,18 @@ import { randomBytes } from 'node:crypto';
 const request: typeof import('supertest') = require('supertest');
 import { AppModule } from '../../app.module';
 import { DatabaseService } from '../../database/database.service';
+import { PrivateStorageService } from './private-storage.service';
 
 describe('Operación de expedientes HTTP con PostgreSQL', () => {
   let app: INestApplication; let db: DatabaseService; let caseId: string; let establishmentId: string; let userId: string; let agent: ReturnType<typeof request.agent>; let csrf: string;
   const server = () => app.getHttpServer();
   beforeAll(async () => {
     if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== '/convivencia_test') throw new Error('Las pruebas requieren exclusivamente convivencia_test.');
-    app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication(); app.setGlobalPrefix('api'); app.use(cookieParser()); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true })); await app.init(); db = app.get(DatabaseService);
+    const storage = {
+      validateDeclaredUpload: jest.fn(), newSupabaseKey: jest.fn(() => `test/${randomBytes(8).toString('hex')}`), createSignedUploadUrl: jest.fn(async () => 'https://storage.test/upload'),
+      read: jest.fn(async () => Buffer.from('%PDF-test')), validate: jest.fn(() => ({ sizeBytes: 9, sha256: 'a'.repeat(64) })), remove: jest.fn(async () => undefined)
+    };
+    app = (await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrivateStorageService).useValue(storage).compile()).createNestApplication(); app.setGlobalPrefix('api'); app.use(cookieParser()); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true })); await app.init(); db = app.get(DatabaseService);
     const suffix = randomBytes(6).toString('hex'); const establishment = await db.establishment.create({ data: { code: `OPS-${suffix}`, name: 'Pruebas operación' } }); establishmentId = establishment.id;
     const role = await db.role.findUniqueOrThrow({ where: { name: 'CONVIVENCIA' } }); const password = randomBytes(20).toString('base64url'); const user = await db.user.create({ data: { email: `ops-${suffix}@test.local`, displayName: 'Operador de prueba', passwordHash: await argon2.hash(password), roles: { create: { roleId: role.id } }, establishmentMemberships: { create: { establishmentId } } } }); userId = user.id;
     const stage = await db.caseStage.create({ data: { establishmentId, code: 'INICIO', name: 'Inicio', displayOrder: 1 } }); caseId = (await db.case.create({ data: { establishmentId, folio: 1, title: 'Expediente de prueba', initialDescription: '', receivedAt: new Date(), categoryCode: 'TEST', priority: 'MEDIA', createdByUserId: userId, currentStageId: stage.id } })).id;
@@ -34,7 +39,8 @@ describe('Operación de expedientes HTTP con PostgreSQL', () => {
     const interview = await agent.post(`/api/cases/${caseId}/interviews`).set('X-CSRF-Token', csrf).send({ occurredAt: '2026-10-23T12:00:00.000Z', modalityCode: 'PRESENCIAL', summary: 'Entrevista de prueba.' }).expect(201); await agent.post(`/api/cases/${caseId}/interviews/${interview.body.id}/finalize`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1 }).expect(201);
     await agent.post(`/api/cases/${caseId}/interviews/${interview.body.id}/void`).set('X-CSRF-Token', csrf).send({ expectedVersion: 2, reason: 'Entrevista de prueba anulada.' }).expect(201);
     expect((await agent.get(`/api/cases/${caseId}/interviews`).expect(200)).body).toEqual([]);
-    const document = await agent.post(`/api/cases/${caseId}/documents`).set('X-CSRF-Token', csrf).send({ kind: 'DOCUMENTO', originalFilename: 'evidencia.pdf', contentType: 'application/pdf', base64Content: Buffer.from('%PDF-test').toString('base64') }).expect(201); expect(document.body.sha256).toMatch(/^[a-f0-9]{64}$/);
+    const pendingDocument = await agent.post(`/api/cases/${caseId}/documents/uploads`).set('X-CSRF-Token', csrf).send({ originalFilename: 'evidencia.pdf', contentType: 'application/pdf', sizeBytes: 9 }).expect(201);
+    const document = await agent.post(`/api/cases/${caseId}/documents/uploads/${pendingDocument.body.uploadId}/complete`).set('X-CSRF-Token', csrf).send({}).expect(201); expect(document.body.sha256).toMatch(/^[a-f0-9]{64}$/);
     const video = await agent.post(`/api/cases/${caseId}/documents`).set('X-CSRF-Token', csrf).send({ kind: 'EVIDENCIA', originalFilename: 'Extracto cámara patio', externalUrl: 'https://colegio.sharepoint.com/:v:/s/Convivencia/Ejemplo' }).expect(201); expect(video.body).toMatchObject({ originalFilename: 'Extracto cámara patio', sizeBytes: 0, externalUrl: 'https://colegio.sharepoint.com/:v:/s/Convivencia/Ejemplo' });
     await agent.get(`/api/cases/${caseId}/documents/${video.body.id}/download`).expect(409);
     await agent.post(`/api/cases/${caseId}/documents/${document.body.id}/void`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1, reason: 'Archivo de prueba anulado.' }).expect(201);
@@ -56,6 +62,10 @@ describe('Operación de expedientes HTTP con PostgreSQL', () => {
     const task = await agent.post(`/api/cases/${caseId}/tasks`).set('X-CSRF-Token', csrf).send({ title: 'Tarea de prueba', assignedToUserId: userId }).expect(201);
     await agent.post(`/api/cases/${caseId}/tasks/${task.body.id}/update`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1, title: 'Tarea de prueba actualizada' }).expect(201);
     await agent.post(`/api/cases/${caseId}/tasks/${task.body.id}/complete`).set('X-CSRF-Token', csrf).send({}).expect(201);
+    const globalTasks = await agent.get('/api/work-items/tasks?includeClosed=true').expect(200);
+    const globalTask = globalTasks.body.rows.find((row: { item: { id: string } }) => row.item.id === task.body.id);
+    expect(globalTask.case).toEqual(expect.objectContaining({ id: caseId, folio: 1, title: 'Expediente de prueba', status: 'ABIERTO' }));
+    expect(globalTask.case).not.toHaveProperty('initialDescription');
     const cancelled = await agent.post(`/api/cases/${caseId}/tasks`).set('X-CSRF-Token', csrf).send({ title: 'Tarea cancelada de prueba' }).expect(201);
     await agent.post(`/api/cases/${caseId}/tasks/${cancelled.body.id}/update`).set('X-CSRF-Token', csrf).send({ expectedVersion: 1, status: 'CANCELADA' }).expect(201);
     const timeline = await agent.get(`/api/cases/${caseId}/timeline`).expect(200); expect(timeline.body.items.map((item: { eventType: string }) => item.eventType)).toEqual(expect.arrayContaining(['PARTICIPANT_UPDATED', 'REPORT_VOIDED', 'INTERVIEW_VOIDED', 'DOCUMENT_VOIDED', 'FOLLOW_UP_VOIDED', 'TASK_UPDATED', 'TASK_COMPLETED', 'TASK_CANCELLED'])); await agent.get('/api/notifications').expect(200);
@@ -70,8 +80,8 @@ describe('Operación de expedientes HTTP con PostgreSQL', () => {
     await remove(`reports/${report.body.id}`).expect(200);
     expect((await agent.get(`/api/cases/${caseId}/reports`).expect(200)).body.map((item: { id: string }) => item.id)).not.toContain(report.body.id);
 
-    const pdf = Buffer.from('%PDF-eliminable').toString('base64');
-    const document = await send('post', 'documents', { kind: 'DOCUMENTO', originalFilename: 'eliminable.pdf', contentType: 'application/pdf', base64Content: pdf }).expect(201); ids.push(document.body.id);
+    const pendingDocument = await send('post', 'documents/uploads', { originalFilename: 'eliminable.pdf', contentType: 'application/pdf', sizeBytes: 9 }).expect(201);
+    const document = await send('post', `documents/uploads/${pendingDocument.body.uploadId}/complete`, {}).expect(201); ids.push(document.body.id);
     await remove(`documents/${document.body.id}`).expect(200);
     await agent.get(`/api/cases/${caseId}/documents/${document.body.id}/download`).expect(404);
 

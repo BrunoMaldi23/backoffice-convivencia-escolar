@@ -42,8 +42,8 @@ const byCategory = computed(() => tally((c) => c.categoryCode, categoryLabel));
 const byPriority = computed(() => tally((c) => c.priority, (code) => priorityOf(code).label));
 const byMonth = computed(() => casesByMonth(filtered.value));
 const summary = computed(() => [
-  ['Expedientes en el período', filtered.value.length], ['Activos', metrics.value.active.length], ['Cerrados', metrics.value.closed],
-  ['Activos con prioridad crítica', metrics.value.critical.length], ['Activos con la próxima acción vencida', metrics.value.overdueActions.length]
+  ['Expedientes en el período', filtered.value.length], ['En gestión', metrics.value.inManagement.length], ['Resueltos pendientes de cierre', metrics.value.resolvedPendingClosure.length], ['Cerrados', metrics.value.closed],
+  ['En gestión con prioridad crítica', metrics.value.critical.length], ['En gestión con la próxima acción vencida', metrics.value.overdueActions.length]
 ] as const);
 
 function exportCsv() {

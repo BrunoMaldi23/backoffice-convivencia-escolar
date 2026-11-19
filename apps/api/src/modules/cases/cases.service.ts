@@ -1,11 +1,11 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { CaseEventType, CaseStatus, Prisma } from '@prisma/client';
+import { CaseEventType, CaseStatus, Prisma, ProtocolVersionStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { SecurityAuditService, AuditRequestContext } from '../../common/security/security-audit.service';
 import { InstitutionsService } from '../institutions/institutions.service';
 
-type CreateCaseInput = { establishmentId: string; title: string; initialDescription?: string; receivedAt: Date; categoryCode: string; priority: string; currentStageId?: string; responsibleUserId?: string; nextAction?: string; nextActionDueAt?: Date };
+type CreateCaseInput = { establishmentId: string; protocolVersionId: string; title: string; initialDescription?: string; receivedAt: Date; categoryCode: string; priority: string; currentStageId?: string; responsibleUserId?: string; nextAction?: string; nextActionDueAt?: Date };
 type UpdateCaseInput = { expectedVersion: number; title?: string; categoryCode?: string; priority?: string; receivedAt?: Date; currentStageId?: string | null; nextAction?: string | null; nextActionDueAt?: Date | null };
 type AssignInput = { responsibleUserId: string; expectedVersion: number; reason?: string };
 type TransitionInput = { toStatus: CaseStatus; stageId?: string; reason?: string; expectedVersion: number };
@@ -27,6 +27,13 @@ const relevantTimelineEvents: CaseEventType[] = [
   CaseEventType.REFERRAL_CREATED, CaseEventType.REFERRAL_UPDATED
 ];
 
+/** Campos necesarios para paneles y listados; el texto interno se carga sólo al abrir el expediente. */
+const caseListSelect = {
+  id: true, establishmentId: true, folio: true, title: true, receivedAt: true, categoryCode: true, priority: true,
+  status: true, currentStageId: true, responsibleUserId: true, createdByUserId: true, closedAt: true,
+  nextAction: true, nextActionDueAt: true, version: true, createdAt: true, updatedAt: true
+} satisfies Prisma.CaseSelect;
+
 @Injectable()
 export class CasesService {
   constructor(private readonly db: DatabaseService, private readonly institutions: InstitutionsService, private readonly audit: SecurityAuditService) {}
@@ -37,27 +44,46 @@ export class CasesService {
       await tx.$queryRaw`SELECT id FROM establishments WHERE id = ${input.establishmentId} FOR UPDATE`;
       const establishment = await tx.establishment.findUnique({ where: { id: input.establishmentId } });
       if (!establishment?.isActive) throw new NotFoundException('Establecimiento no disponible');
+      const protocol = await tx.protocolVersion.findFirst({ where: { id: input.protocolVersionId, status: ProtocolVersionStatus.PUBLICADO, protocolTemplate: { establishmentId: input.establishmentId, isActive: true } }, include: { protocolTemplate: true } });
+      if (!protocol || (protocol.protocolTemplate.categoryCodes.length && !protocol.protocolTemplate.categoryCodes.includes(input.categoryCode))) throw new BadRequestException('Seleccione un protocolo publicado disponible para la categoría del caso');
       if (input.currentStageId) await this.requireStage(tx, input.establishmentId, input.currentStageId);
       if (input.responsibleUserId) await this.institutions.requireActiveMembership(input.responsibleUserId, input.establishmentId, tx);
       const folio = establishment.nextCaseSequence;
       await tx.establishment.update({ where: { id: establishment.id }, data: { nextCaseSequence: { increment: 1 } } });
-      const record = await tx.case.create({ data: { ...input, initialDescription: input.initialDescription ?? '', folio, createdByUserId: actorId } });
+      const { protocolVersionId, ...caseInput } = input;
+      const record = await tx.case.create({ data: { ...caseInput, initialDescription: input.initialDescription ?? '', folio, createdByUserId: actorId } });
       const correlationId = randomUUID();
       if (input.responsibleUserId) await tx.caseAssignment.create({ data: { caseId: record.id, userId: input.responsibleUserId, assignedByUserId: actorId } });
       await this.event(tx, record.id, actorId, CaseEventType.CASE_CREATED, correlationId, { newStatus: record.status, newStageId: record.currentStageId, relatedEntityType: 'CASE' });
-      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'CASE_CREATED', targetType: 'CASE', targetId: record.id, metadata: { establishmentId: input.establishmentId, folio }, context }) });
+      const application = await tx.caseProtocolApplication.create({ data: { caseId: record.id, protocolVersionId, appliedByUserId: actorId, appliedAt: new Date() } });
+      await this.event(tx, record.id, actorId, CaseEventType.PROTOCOL_APPLIED, correlationId, { relatedEntityType: 'PROTOCOL_VERSION', relatedEntityId: protocolVersionId });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'CASE_CREATED', targetType: 'CASE', targetId: record.id, metadata: { establishmentId: input.establishmentId, folio, protocolVersionId }, context }) });
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'PROTOCOL_APPLIED', targetType: 'CASE_PROTOCOL_APPLICATION', targetId: application.id, metadata: { caseId: record.id, protocolVersionId }, context }) });
       return record;
     });
   }
 
   async list(actorId: string, filters: { establishmentId?: string; status?: CaseStatus; responsibleUserId?: string; priority?: string; stageId?: string; from?: Date; to?: Date; page: number; limit: number }) {
     if (filters.establishmentId) await this.institutions.requireActiveMembership(actorId, filters.establishmentId);
-    const where: Prisma.CaseWhereInput = { ...this.institutions.caseAccessWhere(actorId), ...(filters.establishmentId ? { establishmentId: filters.establishmentId } : {}), ...(filters.status ? { status: filters.status } : {}), ...(filters.responsibleUserId ? { responsibleUserId: filters.responsibleUserId } : {}), ...(filters.priority ? { priority: filters.priority } : {}), ...(filters.stageId ? { currentStageId: filters.stageId } : {}), ...((filters.from || filters.to) ? { receivedAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } } : {}) };
-    const [items, total] = await this.db.$transaction([this.db.case.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: (filters.page - 1) * filters.limit, take: filters.limit }), this.db.case.count({ where })]);
-    return { items, total, page: filters.page, limit: filters.limit };
+    const where: Prisma.CaseWhereInput = { ...this.institutions.caseAccessWhere(actorId), archivedAt: null, ...(filters.establishmentId ? { establishmentId: filters.establishmentId } : {}), ...(filters.status ? { status: filters.status } : {}), ...(filters.responsibleUserId ? { responsibleUserId: filters.responsibleUserId } : {}), ...(filters.priority ? { priority: filters.priority } : {}), ...(filters.stageId ? { currentStageId: filters.stageId } : {}), ...((filters.from || filters.to) ? { receivedAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } } : {}) };
+    const [items, total] = await this.db.$transaction([this.db.case.findMany({ where, select: caseListSelect, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: (filters.page - 1) * filters.limit, take: filters.limit }), this.db.case.count({ where })]);
+    return {
+      items: items.map((item) => ({ ...item, initialDescription: '', closureReason: null })),
+      total,
+      page: filters.page,
+      limit: filters.limit
+    };
   }
 
-  async get(actorId: string, caseId: string) { return this.institutions.requireCaseAccess(actorId, caseId); }
+  /** El detalle incorpora la etapa para que la interfaz no deba resolver otro catálogo sólo para mostrar su nombre. */
+  async get(actorId: string, caseId: string) {
+    const record = await this.db.case.findFirst({
+      where: { id: caseId, ...this.institutions.caseAccessWhere(actorId) },
+      include: { currentStage: { select: { id: true, code: true, name: true } } },
+    });
+    if (!record) throw new NotFoundException('Expediente no disponible');
+    return record;
+  }
 
   async update(actorId: string, caseId: string, input: UpdateCaseInput, context: AuditRequestContext) {
     return this.db.$transaction(async (tx) => {
@@ -101,6 +127,17 @@ export class CasesService {
       const type = input.toStatus === CaseStatus.PAUSADO ? CaseEventType.CASE_PAUSED : input.toStatus === CaseStatus.RESUELTO ? CaseEventType.CASE_RESOLVED : input.toStatus === CaseStatus.CERRADO ? CaseEventType.CASE_CLOSED : before.status === CaseStatus.CERRADO ? CaseEventType.CASE_REOPENED : before.status === CaseStatus.PAUSADO ? CaseEventType.CASE_RESUMED : CaseEventType.CASE_TRANSITIONED;
       await this.event(tx, caseId, actorId, type, randomUUID(), { previousStatus: before.status, newStatus: input.toStatus, previousStageId: before.currentStageId, newStageId: input.stageId ?? before.currentStageId });
       await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: type, targetType: 'CASE', targetId: caseId, metadata: { from: before.status, to: input.toStatus }, context }) });
+      return tx.case.findUniqueOrThrow({ where: { id: caseId } });
+    });
+  }
+
+  async archive(actorId: string, caseId: string, expectedVersion: number, reason: string, context: AuditRequestContext) {
+    return this.db.$transaction(async (tx) => {
+      const before = await this.institutions.requireCaseAccess(actorId, caseId, true, tx);
+      if (before.archivedAt) throw new ConflictException('El expediente ya está archivado');
+      const updated = await tx.case.updateMany({ where: { id: caseId, version: expectedVersion, archivedAt: null }, data: { archivedAt: new Date(), archivedByUserId: actorId, archiveReason: reason.trim(), version: { increment: 1 } } });
+      if (updated.count !== 1) throw new ConflictException('El expediente fue modificado por otra persona');
+      await tx.securityAudit.create({ data: this.audit.data({ actorUserId: actorId, action: 'CASE_ARCHIVED', targetType: 'CASE', targetId: caseId, metadata: { reason: reason.trim() }, context }) });
       return tx.case.findUniqueOrThrow({ where: { id: caseId } });
     });
   }

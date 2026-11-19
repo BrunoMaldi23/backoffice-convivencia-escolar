@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue';
 import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
 import Select from 'primevue/select';
+import MultiSelect from 'primevue/multiselect';
 import Textarea from 'primevue/textarea';
 import AppIcon from '@/components/AppIcon.vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
@@ -10,6 +11,7 @@ import FormField from '@/components/FormField.vue';
 import MutationDialog from '@/components/MutationDialog.vue';
 import QueryState from '@/components/QueryState.vue';
 import SectionCard from '@/components/SectionCard.vue';
+import SignaturePad from '@/components/SignaturePad.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { useCorrectInterview, useCreateInterview, useDeleteInterviewDraft, useFinalizeInterview, useInterviews, useUpdateInterview, useVoidInterview } from '@/composables/useCaseContent';
 import { useDirectory } from '@/composables/useDirectory';
@@ -36,7 +38,9 @@ const voidInterview = useVoidInterview(props.caseId);
 
 const formOpen = ref(false);
 const editing = ref<Interview | null>(null);
-const form = reactive({ occurredAt: new Date() as Date | null, modality: 'PRESENCIAL' as string | null, summary: '', restricted: '', agreements: '' });
+const form = reactive({ occurredAt: new Date() as Date | null, modality: 'PRESENCIAL' as string | null, studentName: '', guardianName: '', courseName: '', requestedBy: [] as string[], reasonCategories: [] as string[], interviewReason: '', summary: '', restricted: '', agreements: '' });
+const REQUESTED_BY_OPTIONS = ['Apoderado(a)', 'Profesor(a)', 'Estudiante', 'Coordinación', 'Otro'];
+const REASON_OPTIONS = ['Rendimiento académico', 'Hábitos escolares', 'Convivencia escolar', 'Disciplina', 'Situación emocional', 'Otro'];
 const errors = ref<Record<string, string>>({});
 const revealed = reactive<Record<string, boolean>>({});
 const target = ref<Interview | null>(null);
@@ -48,6 +52,10 @@ const voidTarget = ref<Interview | null>(null);
 const voidReason = ref('');
 const voidError = ref<string | null>(null);
 const deleteTarget = ref<Interview | null>(null);
+const signingTarget = ref<Interview | null>(null);
+const intervieweeSignature = ref<string | null>(null);
+const interviewerSignature = ref<string | null>(null);
+const signingOpen = computed({ get: () => Boolean(signingTarget.value), set: (value: boolean) => { if (!value) signingTarget.value = null; } });
 const deleteOpen = computed({ get: () => Boolean(deleteTarget.value), set: (value: boolean) => { if (!value) deleteTarget.value = null; } });
 const actionOpen = computed({ get: () => Boolean(target.value && mode.value), set: (v: boolean) => { if (!v) { target.value = null; mode.value = null; } } });
 const formMutation = computed(() => (editing.value ? update : create));
@@ -55,27 +63,26 @@ const formMutation = computed(() => (editing.value ? update : create));
 function openForm(interview: Interview | null) {
   editing.value = interview;
   Object.assign(form, interview
-    ? { occurredAt: isoToDate(interview.occurredAt), modality: interview.modalityCode, summary: interview.summary, restricted: interview.restrictedNotes ?? '', agreements: interview.agreements ?? '' }
-    : { occurredAt: new Date(), modality: 'PRESENCIAL', summary: '', restricted: '', agreements: '' });
+    ? { occurredAt: isoToDate(interview.occurredAt), modality: interview.modalityCode, studentName: interview.studentName ?? '', guardianName: interview.guardianName ?? '', courseName: interview.courseName ?? '', requestedBy: interview.requestedBy ?? [], reasonCategories: interview.reasonCategories ?? [], interviewReason: interview.interviewReason ?? '', summary: interview.summary, restricted: interview.restrictedNotes ?? '', agreements: interview.agreements ?? '' }
+    : { occurredAt: new Date(), modality: 'PRESENCIAL', studentName: '', guardianName: '', courseName: '', requestedBy: [], reasonCategories: [], interviewReason: '', summary: '', restricted: '', agreements: '' });
   errors.value = {}; create.reset(); update.reset(); formOpen.value = true;
 }
 async function submit() {
-  errors.value = validateAll(form, { occurredAt: [required('Indique la fecha y hora.')], modality: [required('Seleccione la modalidad.')], summary: [required('Escriba la síntesis de la entrevista.'), minLength(3), maxLength(4000)], restricted: [maxLength(4000)], agreements: [maxLength(4000)] }) as Record<string, string>;
+  errors.value = validateAll(form, { occurredAt: [required('Indique la fecha y hora.')], modality: [required('Seleccione la modalidad.')], studentName: [required('Indique el nombre del estudiante.'), maxLength(180)], summary: [required('Escriba los temas tratados.'), minLength(3), maxLength(4000)], restricted: [maxLength(4000)], agreements: [maxLength(4000)] }) as Record<string, string>;
   if (Object.keys(errors.value).length) return;
-  const body = { occurredAt: dateToIso(form.occurredAt!, true), modalityCode: form.modality!, summary: form.summary.trim(), ...(form.restricted.trim() ? { restrictedNotes: form.restricted.trim() } : {}), ...(form.agreements.trim() ? { agreements: form.agreements.trim() } : {}) };
+  const body = { occurredAt: dateToIso(form.occurredAt!, true), modalityCode: form.modality!, studentName: form.studentName.trim(), requestedBy: form.requestedBy, reasonCategories: form.reasonCategories, summary: form.summary.trim(), ...(form.guardianName.trim() ? { guardianName: form.guardianName.trim() } : {}), ...(form.courseName.trim() ? { courseName: form.courseName.trim() } : {}), ...(form.interviewReason.trim() ? { interviewReason: form.interviewReason.trim() } : {}), ...(form.restricted.trim() ? { restrictedNotes: form.restricted.trim() } : {}), ...(form.agreements.trim() ? { agreements: form.agreements.trim() } : {}) };
   try {
-    if (editing.value) await update.mutateAsync({ ...body, id: editing.value.id, expectedVersion: editing.value.version });
-    else await create.mutateAsync(body);
-    formOpen.value = false;
+    const saved = editing.value ? await update.mutateAsync({ ...body, id: editing.value.id, expectedVersion: editing.value.version }) : await create.mutateAsync(body);
+    formOpen.value = false; openSigning(saved);
   } catch { /* el error se muestra en el diálogo */ }
 }
 
-function ask(interview: Interview, action: 'finalize' | 'correct') { target.value = interview; mode.value = action; reason.value = ''; reasonError.value = null; finalize.reset(); correct.reset(); }
+function openSigning(interview: Interview) { signingTarget.value = interview; intervieweeSignature.value = null; interviewerSignature.value = null; finalize.reset(); }
+function ask(interview: Interview, action: 'finalize' | 'correct') { if (action === 'finalize') { openSigning(interview); return; } target.value = interview; mode.value = action; reason.value = ''; reasonError.value = null; correct.reset(); }
 async function confirm() {
   if (!target.value || !mode.value) return;
   try {
-    if (mode.value === 'finalize') await finalize.mutateAsync({ id: target.value.id, expectedVersion: target.value.version });
-    else {
+  if (mode.value === 'correct') {
       reasonError.value = reason.value.trim().length < 5 ? 'Escriba el motivo de la corrección (al menos 5 caracteres).' : maxLength(1000)(reason.value);
       if (reasonError.value) return;
       await correct.mutateAsync({ id: target.value.id, reason: reason.value.trim() });
@@ -83,6 +90,7 @@ async function confirm() {
     actionOpen.value = false;
   } catch { /* el error se muestra en el diálogo */ }
 }
+async function submitSignatures() { if (!signingTarget.value || !intervieweeSignature.value || !interviewerSignature.value) return; try { await finalize.mutateAsync({ id: signingTarget.value.id, expectedVersion: signingTarget.value.version, intervieweeSignature: intervieweeSignature.value, interviewerSignature: interviewerSignature.value }); signingOpen.value = false; } catch { /* el error se muestra en el diálogo */ } }
 const actionMutation = computed(() => (mode.value === 'finalize' ? finalize : correct));
 function askVoid(interview: Interview) { voidTarget.value = interview; voidReason.value = ''; voidError.value = null; voidInterview.reset(); voidOpen.value = true; }
 async function submitVoid() {
@@ -135,7 +143,7 @@ async function removeDraft() { if (!deleteTarget.value) return; await deleteDraf
     </QueryState>
   </SectionCard>
 
-  <MutationDialog v-model:visible="formOpen" :header="editing ? 'Editar borrador de entrevista' : 'Registrar entrevista'" :submit-label="editing ? 'Guardar borrador' : 'Guardar como borrador'" width="38rem" :pending="formMutation.isPending.value" :error="formMutation.error.value" @submit="submit" @reload="query.refetch()">
+  <MutationDialog v-model:visible="formOpen" :header="editing ? 'Editar borrador de entrevista' : 'Registrar entrevista'" submit-label="Guardar y continuar a firmas" width="42rem" :pending="formMutation.isPending.value" :error="formMutation.error.value" @submit="submit" @reload="query.refetch()">
     <div class="grid gap-4 sm:grid-cols-2">
       <FormField id="iv-when" label="Fecha y hora" required :error="errors.occurredAt">
         <template #default="{ id, invalid }"><DatePicker v-model="form.occurredAt" :input-id="id" show-time hour-format="24" date-format="dd-mm-yy" :max-date="new Date()" :invalid="invalid" show-icon icon-display="input" class="w-full" /></template>
@@ -144,7 +152,15 @@ async function removeDraft() { if (!deleteTarget.value) return; await deleteDraf
         <template #default="{ id, invalid }"><Select v-model="form.modality" :input-id="id" :options="MODALITY_OPTIONS" option-label="label" option-value="value" :invalid="invalid" class="w-full" /></template>
       </FormField>
     </div>
-    <FormField id="iv-summary" label="Síntesis" required :error="errors.summary">
+    <div class="grid gap-4 sm:grid-cols-2">
+      <FormField id="iv-student" label="Nombre estudiante" required :error="errors.studentName"><template #default="{ id, invalid }"><input :id="id" v-model="form.studentName" maxlength="180" :aria-invalid="invalid" class="w-full rounded-md border border-slate-300 px-3 py-2"></template></FormField>
+      <FormField id="iv-guardian" label="Nombre apoderado/a"><template #default="{ id, invalid }"><input :id="id" v-model="form.guardianName" maxlength="180" :aria-invalid="invalid" class="w-full rounded-md border border-slate-300 px-3 py-2"></template></FormField>
+      <FormField id="iv-course" label="Curso"><template #default="{ id, invalid }"><input :id="id" v-model="form.courseName" maxlength="120" :aria-invalid="invalid" class="w-full rounded-md border border-slate-300 px-3 py-2"></template></FormField>
+      <FormField id="iv-requested" label="Entrevista solicitada por"><template #default="{ id }"><MultiSelect v-model="form.requestedBy" :input-id="id" :options="REQUESTED_BY_OPTIONS" display="chip" class="w-full" /></template></FormField>
+    </div>
+    <FormField id="iv-categories" label="Motivo principal de la entrevista"><template #default="{ id }"><MultiSelect v-model="form.reasonCategories" :input-id="id" :options="REASON_OPTIONS" display="chip" class="w-full" /></template></FormField>
+    <FormField id="iv-reason-detail" label="Motivo de la entrevista"><template #default="{ id, invalid }"><Textarea :id="id" v-model="form.interviewReason" rows="2" auto-resize maxlength="1000" :invalid="invalid" class="w-full" /></template></FormField>
+    <FormField id="iv-summary" label="Temas tratados" required :error="errors.summary">
       <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="form.summary" rows="4" auto-resize maxlength="4000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
     </FormField>
     <FormField id="iv-agreements" label="Acuerdos" :error="errors.agreements">
@@ -155,17 +171,19 @@ async function removeDraft() { if (!deleteTarget.value) return; await deleteDraf
     </FormField>
   </MutationDialog>
 
+  <MutationDialog v-model:visible="signingOpen" header="Firmar y finalizar entrevista" submit-label="Generar y guardar PDF firmado" width="56rem" :pending="finalize.isPending.value" :disabled="!intervieweeSignature || !interviewerSignature" :error="finalize.error.value" @submit="submitSignatures" @reload="query.refetch()">
+    <p class="text-sm leading-relaxed text-slate-700">Ambas personas deben firmar antes de generar el documento final. El PDF quedará resguardado dentro del expediente y no podrá modificarse.</p>
+    <div class="grid gap-4 md:grid-cols-2"><SignaturePad label="Firma entrevistado/a" @change="intervieweeSignature = $event" /><SignaturePad label="Firma entrevistador/a" @change="interviewerSignature = $event" /></div>
+  </MutationDialog>
+
   <MutationDialog
     v-model:visible="actionOpen" :header="mode === 'finalize' ? 'Finalizar entrevista' : 'Corregir entrevista'" :submit-label="mode === 'finalize' ? 'Finalizar' : 'Reabrir para corregir'"
     :pending="actionMutation.isPending.value" :error="actionMutation.error.value" @submit="confirm" @reload="query.refetch()"
   >
-    <p v-if="mode === 'finalize'" class="text-sm leading-relaxed text-slate-700">Al finalizar, la entrevista deja de ser editable. Si después detecta un error, podrá reabrirla indicando el motivo de la corrección.</p>
-    <template v-else>
-      <p class="text-sm leading-relaxed text-slate-700">La entrevista volverá a borrador para poder editarla. La corrección y su motivo quedan registrados.</p>
-      <FormField id="iv-reason" label="Motivo de la corrección" required :error="reasonError">
-        <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="reason" rows="3" auto-resize maxlength="1000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
-      </FormField>
-    </template>
+    <p class="text-sm leading-relaxed text-slate-700">La entrevista volverá a borrador para poder editarla. La corrección y su motivo quedan registrados.</p>
+    <FormField id="iv-reason" label="Motivo de la corrección" required :error="reasonError">
+      <template #default="{ id, invalid, describedby }"><Textarea :id="id" v-model="reason" rows="3" auto-resize maxlength="1000" :invalid="invalid" :aria-describedby="describedby" class="w-full" /></template>
+    </FormField>
   </MutationDialog>
 
   <ConfirmActionDialog v-model:visible="deleteOpen" header="Eliminar borrador" confirm-label="Eliminar borrador" danger :message="`Se eliminará el borrador de entrevista y no quedará en el expediente ni en su línea de tiempo. Esta acción solo está disponible antes de finalizarla.`" :action="removeDraft" />
