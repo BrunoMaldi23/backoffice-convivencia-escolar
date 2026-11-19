@@ -15,31 +15,72 @@ export class InterviewPdfService {
     const interviewerSignature = this.signature(input.interviewerSignature);
     return new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
-      const document = new PDFDocument({ size: 'A4', margin: 48, info: { Title: 'Registro de entrevista' } });
+      // Formato oficio del registro institucional: hoja única con los campos y firmas visibles.
+      const document = new PDFDocument({ size: [612, 972], margin: 0, info: { Title: 'Registro de entrevista' } });
       document.on('data', (chunk: Buffer) => chunks.push(chunk));
       document.on('end', () => resolve(Buffer.concat(chunks)));
       document.on('error', reject);
-      const line = (label: string, value?: string | null) => document.font('Helvetica').fontSize(10).text(`${label}: ${value?.trim() || 'Sin registro'}`, { width: 500 });
-      const section = (title: string) => { document.moveDown(0.8).font('Helvetica-Bold').fontSize(12).text(title); document.moveTo(48, document.y + 3).lineTo(547, document.y + 3).strokeColor('#1e3a5f').stroke(); document.moveDown(0.35); };
-      document.fillColor('#0f3d75').font('Helvetica-Bold').fontSize(12).text(input.establishmentName.toUpperCase());
-      document.fillColor('#111827').fontSize(17).text('REGISTRO ENTREVISTA APODERADO/ESTUDIANTE', { align: 'center' });
-      document.moveDown(0.8);
-      line('Nombre estudiante', input.studentName); line('Nombre apoderado(a)', input.guardianName); line('Curso', input.courseName);
-      line('Fecha', new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeStyle: 'short', timeZone: 'America/Santiago' }).format(input.occurredAt));
-      line('Entrevistador(a)', input.interviewerName);
-      section('Entrevista solicitada por'); document.font('Helvetica').fontSize(10).text(input.requestedBy.length ? input.requestedBy.join(' · ') : 'Sin registro');
-      section('Motivo principal de la entrevista'); document.font('Helvetica').fontSize(10).text(input.reasonCategories.length ? input.reasonCategories.join(' · ') : 'Sin registro');
-      line('Motivo de la entrevista', input.interviewReason);
-      section('Temas tratados'); document.font('Helvetica').fontSize(10).text(input.summary, { align: 'justify' });
-      section('Acuerdos'); document.font('Helvetica').fontSize(10).text(input.agreements?.trim() || 'Sin acuerdos registrados.', { align: 'justify' });
-      document.moveDown(1).font('Helvetica-Oblique').fontSize(9).text('Recuerde que esta información es de carácter confidencial.');
-      const signatureY = Math.max(document.y + 24, 620);
-      document.image(intervieweeSignature, 65, signatureY, { fit: [180, 72] });
-      document.image(interviewerSignature, 350, signatureY, { fit: [180, 72] });
-      document.moveTo(65, signatureY + 76).lineTo(245, signatureY + 76).strokeColor('#111827').stroke();
-      document.moveTo(350, signatureY + 76).lineTo(530, signatureY + 76).stroke();
-      document.font('Helvetica-Bold').fontSize(10).text('Firma entrevistado/a', 92, signatureY + 82, { width: 126, align: 'center' });
-      document.text('Firma entrevistador/a', 377, signatureY + 82, { width: 126, align: 'center' });
+      const left = 54;
+      const right = 558;
+      const width = right - left;
+      const ink = '#111111';
+      const blue = '#102c72';
+      const label = (text: string, x: number, y: number) => document.fillColor(ink).font('Times-Bold').fontSize(10).text(text, x, y);
+      const rule = (y: number, from = left, to = right) => document.strokeColor(ink).lineWidth(0.55).moveTo(from, y).lineTo(to, y).stroke();
+      const value = (text: string | null | undefined, x: number, y: number, textWidth: number) => {
+        const content = text?.trim() || 'Sin registro';
+        let size = 10;
+        document.font('Times-Roman');
+        while (size > 7 && document.fontSize(size).widthOfString(content) > textWidth) size -= 0.5;
+        document.fillColor(ink).fontSize(size).text(content, x, y, { width: textWidth, height: 12, lineBreak: false, ellipsis: true });
+      };
+      const section = (text: string, y: number) => { label(text, left, y); rule(y + 15); };
+      const grid = (headers: string[], selected: string[], y: number) => {
+        const cell = width / headers.length;
+        document.strokeColor(ink).lineWidth(0.55).rect(left, y, width, 42).stroke();
+        for (let index = 1; index < headers.length; index += 1) document.moveTo(left + cell * index, y).lineTo(left + cell * index, y + 42).stroke();
+        document.moveTo(left, y + 25).lineTo(right, y + 25).stroke();
+        headers.forEach((header, index) => {
+          document.fillColor(ink).font('Times-Bold').fontSize(8.5).text(header, left + cell * index + 3, y + 3, { width: cell - 6, height: 20, align: 'center' });
+          if (selected.includes(header.replace('\n', ' '))) document.font('Times-Bold').fontSize(10).text('X', left + cell * index, y + 28, { width: cell, align: 'center' });
+        });
+      };
+      const ruledText = (text: string | null | undefined, y: number, lines: number) => {
+        const lineHeight = 18;
+        document.fillColor(ink).font('Times-Roman').fontSize(10).text(text?.trim() || 'Sin registro', left, y + 4, { width, height: lines * lineHeight - 5, lineGap: 2, ellipsis: true });
+        for (let index = 1; index <= lines; index += 1) rule(y + lineHeight * index);
+      };
+
+      document.fillColor(blue).font('Helvetica-Bold').fontSize(13).text(input.establishmentName.toUpperCase(), left, 43);
+      document.font('Times-Bold').fontSize(15).fillColor(ink).text('REGISTRO ENTREVISTA APODERADO/ESTUDIANTE', left, 76, { width, align: 'center' });
+
+      label('Nombre estudiante:', left, 106); value(input.studentName, 145, 106, right - 145); rule(121, 145);
+      label('Nombre apoderado(a):', left, 124); value(input.guardianName, 156, 124, right - 156); rule(139, 156);
+      label('Curso:', left, 142); value(input.courseName, 88, 142, 72); rule(157, 88, 160);
+      label('Fecha:', 170, 142); value(new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeZone: 'America/Santiago' }).format(input.occurredAt), 210, 142, 104); rule(157, 210, 314);
+      label('Profesor(a):', 324, 142); value(input.interviewerName, 387, 142, right - 387); rule(157, 387);
+
+      section('Entrevista solicitada por:', 173);
+      grid(['Apoderado(a)', 'Profesor(a)', 'Estudiante', 'Coordinación', 'Otro'], input.requestedBy, 190);
+      section('Motivo principal de la entrevista', 239);
+      grid(['Rendimiento\nacadémico', 'Hábitos\nescolares', 'Convivencia\nescolar', 'Disciplina', 'Situación\nemocional', 'Otro'], input.reasonCategories, 256);
+      label('Motivo de la entrevista:', left, 307); value(input.interviewReason, 181, 307, right - 181); rule(322, 181);
+      section('Temas tratados (explicar)', 341);
+      ruledText(input.summary, 358, 10);
+      section('Acuerdos', 550);
+      ruledText(input.agreements, 567, 8);
+
+      document.fillColor(ink).font('Times-Bold').fontSize(9).text('* Recuerde que esta información es de carácter confidencial', left, 727);
+      const signatureY = 768;
+      document.image(intervieweeSignature, 80, signatureY, { fit: [155, 56], align: 'center', valign: 'center' });
+      document.image(interviewerSignature, 377, signatureY, { fit: [155, 56], align: 'center', valign: 'center' });
+      rule(signatureY + 62, 78, 250); rule(signatureY + 62, 362, 534);
+      document.fillColor(ink).font('Times-Bold').fontSize(10).text('Firma entrevistado/a', 78, signatureY + 66, { width: 172, align: 'center' });
+      document.text('Firma entrevistador/a', 362, signatureY + 66, { width: 172, align: 'center' });
+
+      document.strokeColor('#444444').lineWidth(3).moveTo(0, 894).lineTo(612, 894).stroke();
+      document.fillColor('#333333').font('Helvetica').fontSize(7.5).text('Teléfono: +56 45 2686200\nDirección: Caupolicán 71 - Temuco\nE-Mail: contacto@colegiobautista.cl', left, 908);
+      document.font('Helvetica-Bold').fontSize(8.5).text('Cambridge Assessment\nInternational Education', 415, 912, { width: 143, align: 'right' });
       document.end();
     });
   }
