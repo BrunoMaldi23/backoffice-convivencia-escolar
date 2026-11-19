@@ -29,8 +29,8 @@ function setup() {
   if (!canvas.value) return;
   // El espacio visual se mantiene amplio con CSS, pero el PNG se acota para que dos firmas
   // viajen holgadamente dentro del límite de la API al cerrar el acta.
-  canvas.value.width = 480;
-  canvas.value.height = 160;
+  canvas.value.width = 320;
+  canvas.value.height = 120;
   context = canvas.value.getContext('2d');
   if (!context) return;
   context.strokeStyle = '#0f172a';
