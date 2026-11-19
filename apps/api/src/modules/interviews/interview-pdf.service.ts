@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import PDFDocument from 'pdfkit';
+// pdfkit se publica como CommonJS; la importación por defecto compila pero falla en el runtime serverless.
+import * as PDFDocument from 'pdfkit';
 
 export type SignedInterviewPdf = {
   establishmentName: string; studentName: string; guardianName?: string | null; courseName?: string | null;
