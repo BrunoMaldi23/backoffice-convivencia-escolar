@@ -55,6 +55,7 @@ const deleteTarget = ref<Interview | null>(null);
 const signingTarget = ref<Interview | null>(null);
 const intervieweeSignature = ref<string | null>(null);
 const interviewerSignature = ref<string | null>(null);
+const signingStep = ref<'interviewee' | 'interviewer'>('interviewee');
 const signingOpen = computed({ get: () => Boolean(signingTarget.value), set: (value: boolean) => { if (!value) signingTarget.value = null; } });
 const deleteOpen = computed({ get: () => Boolean(deleteTarget.value), set: (value: boolean) => { if (!value) deleteTarget.value = null; } });
 const actionOpen = computed({ get: () => Boolean(target.value && mode.value), set: (v: boolean) => { if (!v) { target.value = null; mode.value = null; } } });
@@ -77,7 +78,7 @@ async function submit() {
   } catch { /* el error se muestra en el diálogo */ }
 }
 
-function openSigning(interview: Interview) { signingTarget.value = interview; intervieweeSignature.value = null; interviewerSignature.value = null; finalize.reset(); }
+function openSigning(interview: Interview) { signingTarget.value = interview; intervieweeSignature.value = null; interviewerSignature.value = null; signingStep.value = 'interviewee'; finalize.reset(); }
 function ask(interview: Interview, action: 'finalize' | 'correct') { if (action === 'finalize') { openSigning(interview); return; } target.value = interview; mode.value = action; reason.value = ''; reasonError.value = null; correct.reset(); }
 async function confirm() {
   if (!target.value || !mode.value) return;
@@ -90,7 +91,14 @@ async function confirm() {
     actionOpen.value = false;
   } catch { /* el error se muestra en el diálogo */ }
 }
-async function submitSignatures() { if (!signingTarget.value || !intervieweeSignature.value || !interviewerSignature.value) return; try { await finalize.mutateAsync({ id: signingTarget.value.id, expectedVersion: signingTarget.value.version, intervieweeSignature: intervieweeSignature.value, interviewerSignature: interviewerSignature.value }); signingOpen.value = false; } catch { /* el error se muestra en el diálogo */ } }
+const signingHeader = computed(() => signingStep.value === 'interviewee' ? 'Firma de la persona entrevistada' : 'Firma de quien entrevista');
+const signingSubmitLabel = computed(() => signingStep.value === 'interviewee' ? 'Continuar a firma de entrevistador/a' : 'Generar y guardar PDF firmado');
+const signingDisabled = computed(() => signingStep.value === 'interviewee' ? !intervieweeSignature.value : !interviewerSignature.value);
+async function submitSignatures() {
+  if (signingStep.value === 'interviewee') { signingStep.value = 'interviewer'; return; }
+  if (!signingTarget.value || !intervieweeSignature.value || !interviewerSignature.value) return;
+  try { await finalize.mutateAsync({ id: signingTarget.value.id, expectedVersion: signingTarget.value.version, intervieweeSignature: intervieweeSignature.value, interviewerSignature: interviewerSignature.value }); signingOpen.value = false; } catch { /* el error se muestra en el diálogo */ }
+}
 const actionMutation = computed(() => (mode.value === 'finalize' ? finalize : correct));
 function askVoid(interview: Interview) { voidTarget.value = interview; voidReason.value = ''; voidError.value = null; voidInterview.reset(); voidOpen.value = true; }
 async function submitVoid() {
@@ -171,9 +179,21 @@ async function removeDraft() { if (!deleteTarget.value) return; await deleteDraf
     </FormField>
   </MutationDialog>
 
-  <MutationDialog v-model:visible="signingOpen" header="Firmar y finalizar entrevista" submit-label="Generar y guardar PDF firmado" width="56rem" :pending="finalize.isPending.value" :disabled="!intervieweeSignature || !interviewerSignature" :error="finalize.error.value" @submit="submitSignatures" @reload="query.refetch()">
-    <p class="text-sm leading-relaxed text-slate-700">Ambas personas deben firmar antes de generar el documento final. El PDF quedará resguardado dentro del expediente y no podrá modificarse.</p>
-    <div class="grid gap-4 md:grid-cols-2"><SignaturePad label="Firma entrevistado/a" @change="intervieweeSignature = $event" /><SignaturePad label="Firma entrevistador/a" @change="interviewerSignature = $event" /></div>
+  <MutationDialog v-model:visible="signingOpen" :header="signingHeader" :submit-label="signingSubmitLabel" width="60rem" :pending="finalize.isPending.value" :disabled="signingDisabled" :error="finalize.error.value" @submit="submitSignatures" @reload="query.refetch()">
+    <div class="mx-auto max-w-3xl space-y-5">
+      <div class="text-center">
+        <p class="text-sm font-semibold text-sky-700">Paso {{ signingStep === 'interviewee' ? '1' : '2' }} de 2</p>
+        <p class="mt-1 text-sm leading-relaxed text-slate-700">{{ signingStep === 'interviewee' ? 'Solicite a la persona entrevistada que firme. Luego entregue el dispositivo a quien realizó la entrevista.' : 'Ahora firme quien realizó la entrevista para completar el acta.' }}</p>
+      </div>
+      <div v-show="signingStep === 'interviewee'">
+        <SignaturePad label="Firma de la persona entrevistada" @change="intervieweeSignature = $event" />
+      </div>
+      <div v-show="signingStep === 'interviewer'" class="space-y-3">
+        <Button label="Volver a firma de entrevistado/a" size="small" severity="secondary" text @click="signingStep = 'interviewee'" />
+        <SignaturePad label="Firma de quien entrevista" @change="interviewerSignature = $event" />
+      </div>
+      <p class="text-center text-xs text-slate-500">Al completar ambas firmas se generará un PDF privado y no modificable dentro del expediente.</p>
+    </div>
   </MutationDialog>
 
   <MutationDialog
