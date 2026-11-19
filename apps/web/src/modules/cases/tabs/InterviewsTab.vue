@@ -190,7 +190,7 @@ async function removeDraft() { if (!deleteTarget.value) return; await deleteDraf
       </div>
       <div v-show="signingStep === 'interviewer'" class="space-y-3">
         <Button label="Volver a firma de entrevistado/a" size="small" severity="secondary" text @click="signingStep = 'interviewee'" />
-        <SignaturePad label="Firma de quien entrevista" @change="interviewerSignature = $event" />
+        <SignaturePad label="Firma de quien entrevista" allow-upload @change="interviewerSignature = $event" />
       </div>
       <p class="text-center text-xs text-slate-500">Al completar ambas firmas se generará un PDF privado y no modificable dentro del expediente.</p>
     </div>
