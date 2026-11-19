@@ -9,7 +9,9 @@ const context = (request: AdminRequest) => ({ ipAddress: request.ip, userAgent: 
 class InterviewDto { @IsDateString() occurredAt!: string; @IsString() @MinLength(2) @MaxLength(40) modalityCode!: string; @IsString() @MinLength(3) @MaxLength(4000) summary!: string; @IsOptional() @IsString() @MaxLength(4000) restrictedNotes?: string; @IsOptional() @IsString() @MaxLength(4000) agreements?: string; @IsOptional() @IsString() @MinLength(2) @MaxLength(180) studentName?: string; @IsOptional() @IsString() @MaxLength(180) guardianName?: string; @IsOptional() @IsString() @MaxLength(120) courseName?: string; @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(40, { each: true }) requestedBy?: string[]; @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(60, { each: true }) reasonCategories?: string[]; @IsOptional() @IsString() @MaxLength(1000) interviewReason?: string; }
 class UpdateInterviewDto extends InterviewDto { @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number; }
 class VersionDto { @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number; }
-class FinalizeInterviewDto extends VersionDto { @IsOptional() @IsString() @MinLength(100) @MaxLength(250000) intervieweeSignature?: string; @IsOptional() @IsString() @MinLength(100) @MaxLength(250000) interviewerSignature?: string; }
+/** Las firmas se validan como PNG y con límite de bytes en InterviewPdfService. El DTO sólo comprueba el tipo para no rechazar
+ * una imagen válida por su codificación base64 antes de que se aplique esa validación específica. */
+class FinalizeInterviewDto extends VersionDto { @IsOptional() @IsString() intervieweeSignature?: string; @IsOptional() @IsString() interviewerSignature?: string; }
 class CorrectionDto { @IsString() @MinLength(5) @MaxLength(1000) reason!: string; }
 class VoidInterviewDto extends VersionDto { @IsString() @MinLength(5) @MaxLength(1000) reason!: string; }
 @ApiTags('entrevistas') @ApiCookieAuth() @Controller('cases/:caseId/interviews') @UseGuards(SessionGuard, CsrfGuard, PermissionsGuard)
