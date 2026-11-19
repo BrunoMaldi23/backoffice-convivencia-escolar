@@ -31,7 +31,11 @@ export const unlinkParticipant = async (caseId: Uuid, linkId: Uuid): Promise<Cas
 export const listInterviews = async (caseId: Uuid, options?: ReadRequestOptions): Promise<Interview[]> => (await api.get<Interview[]>(`/cases/${caseId}/interviews`, options)).data;
 export const createInterview = async (caseId: Uuid, input: InterviewInput): Promise<Interview> => (await api.post<Interview>(`/cases/${caseId}/interviews`, input)).data;
 export const updateInterview = async (caseId: Uuid, id: Uuid, input: InterviewInput & { expectedVersion: number }): Promise<Interview> => (await api.patch<Interview>(`/cases/${caseId}/interviews/${id}`, input)).data;
-export const finalizeInterview = async (caseId: Uuid, id: Uuid, input: number | { expectedVersion: number; intervieweeSignature: string; interviewerSignature: string }): Promise<Interview> => (await api.post<Interview>(`/cases/${caseId}/interviews/${id}/finalize`, typeof input === 'number' ? { expectedVersion: input } : input)).data;
+/** El id identifica el recurso en la URL; nunca se replica en el cuerpo porque el DTO del servidor lo rechaza. */
+export const finalizeInterview = async (caseId: Uuid, id: Uuid, input: number | { id?: Uuid; expectedVersion: number; intervieweeSignature: string; interviewerSignature: string }): Promise<Interview> => {
+  const body = typeof input === 'number' ? { expectedVersion: input } : pick(input, ['expectedVersion', 'intervieweeSignature', 'interviewerSignature'] as const);
+  return (await api.post<Interview>(`/cases/${caseId}/interviews/${id}/finalize`, body)).data;
+};
 export const correctInterview = async (caseId: Uuid, id: Uuid, reason: string): Promise<Interview> => (await api.post<Interview>(`/cases/${caseId}/interviews/${id}/correct`, { reason })).data;
 export const deleteInterviewDraft = async (caseId: Uuid, id: Uuid, expectedVersion: number): Promise<{ id: Uuid }> => (await api.delete<{ id: Uuid }>(`/cases/${caseId}/interviews/${id}`, { data: { expectedVersion } })).data;
 export const voidInterview = async (caseId: Uuid, id: Uuid, input: { expectedVersion: number; reason: string }): Promise<Interview> => (await api.post<Interview>(`/cases/${caseId}/interviews/${id}/void`, pick(input, ['expectedVersion', 'reason'] as const))).data;

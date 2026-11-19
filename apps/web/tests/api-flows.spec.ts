@@ -115,6 +115,16 @@ describe('contenido del expediente', () => {
     expect(reopened.status).toBe('BORRADOR');
   });
 
+  it('no replica el id de la entrevista en el cuerpo al finalizar con firmas', async () => {
+    const record = caseWith('ABIERTO');
+    const draft = await cases.createInterview(record.id, { occurredAt: new Date().toISOString(), modalityCode: 'presencial', summary: 'Firma de prueba' });
+    const adapter = api.defaults.adapter as import('axios').AxiosAdapter;
+    let sent: unknown;
+    api.defaults.adapter = async (config) => { sent = config.data; return adapter(config); };
+    await cases.finalizeInterview(record.id, draft.id, { id: draft.id, expectedVersion: draft.version, intervieweeSignature: 'data:image/png;base64,AA==', interviewerSignature: 'data:image/png;base64,AA==' });
+    expect(JSON.parse(String(sent))).toEqual({ expectedVersion: draft.version, intervieweeSignature: 'data:image/png;base64,AA==', interviewerSignature: 'data:image/png;base64,AA==' });
+  });
+
   it('gestiona medidas, seguimientos y tareas', async () => {
     const record = caseWith('ABIERTO');
     const measure = await ops.createMeasure(record.id, { title: 'Acompañamiento', responsibleUserIds: [fake.db.users[1]!.id] });
