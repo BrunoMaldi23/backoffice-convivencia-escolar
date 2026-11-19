@@ -97,7 +97,14 @@ const signingDisabled = computed(() => signingStep.value === 'interviewee' ? !in
 async function submitSignatures() {
   if (signingStep.value === 'interviewee') { signingStep.value = 'interviewer'; return; }
   if (!signingTarget.value || !intervieweeSignature.value || !interviewerSignature.value) return;
-  try { await finalize.mutateAsync({ id: signingTarget.value.id, expectedVersion: signingTarget.value.version, intervieweeSignature: intervieweeSignature.value, interviewerSignature: interviewerSignature.value }); signingOpen.value = false; } catch { /* el error se muestra en el diálogo */ }
+  try {
+    // Se vuelve a leer el borrador antes de cerrar para no enviar una versión cacheada tras editarlo.
+    const refreshed = await query.refetch();
+    const current = refreshed.data?.find((item) => item.id === signingTarget.value!.id);
+    if (!current) throw new Error('La entrevista ya no está disponible para finalizar.');
+    await finalize.mutateAsync({ id: current.id, expectedVersion: current.version, intervieweeSignature: intervieweeSignature.value, interviewerSignature: interviewerSignature.value });
+    signingOpen.value = false;
+  } catch { /* el error se muestra en el diálogo */ }
 }
 const actionMutation = computed(() => (mode.value === 'finalize' ? finalize : correct));
 function askVoid(interview: Interview) { voidTarget.value = interview; voidReason.value = ''; voidError.value = null; voidInterview.reset(); voidOpen.value = true; }

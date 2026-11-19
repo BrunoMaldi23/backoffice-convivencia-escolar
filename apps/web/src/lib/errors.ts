@@ -42,6 +42,16 @@ function serverMessage(error: unknown): string | null {
   return typeof message === 'string' && message.trim() ? message.trim() : null;
 }
 
+/** Traduce validaciones del DTO que son relevantes para el flujo, sin exponer el detalle técnico del servidor. */
+function validationMessage(error: unknown): string | null {
+  if (!isAxiosError(error)) return null;
+  const message = (error.response?.data as { message?: unknown } | undefined)?.message;
+  if (!Array.isArray(message) || !message.every((item) => typeof item === 'string')) return null;
+  if (message.some((item) => item.includes('expectedVersion'))) return 'El borrador cambió o quedó desactualizado. Recargue el expediente e intente nuevamente.';
+  if (message.some((item) => item.includes('Signature'))) return 'No se pudo preparar una de las firmas. Límpiela o cargue nuevamente un PNG e intente otra vez.';
+  return null;
+}
+
 /** Convierte un error en un mensaje accionable para la persona usuaria, sin detalles técnicos. */
 export function describeError(error: unknown, fallback = 'No fue posible completar la operación. Intente nuevamente.'): string {
   if (isIntegrationPending(error)) return 'Esta función aún no está conectada con el servidor.';
@@ -51,7 +61,7 @@ export function describeError(error: unknown, fallback = 'No fue posible complet
     if (!error.response) return 'No fue posible conectar con el servidor. Revise su conexión e intente nuevamente.';
     const status = error.response.status;
     const server = serverMessage(error);
-    if (status === 400) return server ?? 'Los datos enviados no son válidos. Revíselos e intente nuevamente.';
+    if (status === 400) return server ?? validationMessage(error) ?? 'Los datos enviados no son válidos. Revíselos e intente nuevamente.';
     if (status === 401) return 'Su sesión no es válida o expiró. Inicie sesión nuevamente.';
     if (status === 403) return 'No tiene permisos para realizar esta acción.';
     if (status === 404) return 'El registro no está disponible: no existe o no tiene acceso a él.';
